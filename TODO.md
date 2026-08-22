@@ -326,20 +326,103 @@ prefs. `reveal(split)`, `reveal(bar,color)` and `reveal(bar,width)` land
 in `preveal`, which is a **new array that still needs registering** in
 `prefs.tcl`.
 
-## Phase 6 — Menu / command integration
+## Phase 6 — Menu / command integration — DONE
 
-- [ ] Add `Reveal Frames` radiobutton to `FrameMainMenu` in `mframe.tcl`
-      (`-variable current(display) -value reveal`), alongside the
-      `Fade Frames` entry — Phase 5 already added a `Reveal Bar`
-      checkbutton just below that group
-- [ ] Add `icons(currentdisplay,reveal)` in `iconsbottom.tcl` plus the
-      matching `$mb.layout.m entryconfig` line; without it the bottom
-      icon bar shows the *single* icon while reveal is active (it
-      degrades via `icons(currentdisplay,default)`, so this is cosmetic)
-- [ ] Add XPA/SAMP parity: confirm `display reveal` flows through the
-      existing generic mode-set path; add `Process*Cmd`/`SendCmd` pairs
-      for slider position if it should be scriptable (pattern at
-      `frame.tcl:2657-2730` for blink/fade)
+- [x] `Reveal Frames` radiobutton in `FrameMainMenu` (`mframe.tcl`),
+      after `Fade Frames`
+- [x] Bottom icon bar (`iconsbottom.tcl`): `IconMenuButton` entry, the
+      `icons(currentdisplay,reveal)` image, and the `entryconfig 4` line
+- [x] New `frame_reveal.png` icon, both light and dark themes
+- [x] XPA/SAMP/command-line parity via a new `reveal` command
+
+There is **no generic `display <mode>` path** — the plan assumed one.
+Each mode is its own access point (`xpaset ds9 blink`, `... tile`), so
+reveal needed its own. Command surface:
+
+| command | effect |
+|---|---|
+| `xpaset -p ds9 reveal` | enter reveal mode |
+| `xpaset -p ds9 reveal yes\|no` | enter / leave (leave → single) |
+| `xpaset -p ds9 reveal split 0.25` | set split, as a fraction |
+| `xpaset -p ds9 reveal bar yes\|no` | toggle the demarcation bar |
+| `xpaget ds9 reveal` | `yes`/`no` |
+| `xpaget ds9 reveal split` | the fraction |
+| `xpaget ds9 reveal bar` | `yes`/`no` |
+
+Also reachable as `-reveal` on the command line and over SAMP.
+
+New files: `ds9/parsers/revealparser.tac`, `reveallex.fcl`,
+`revealsendparser.tac`, `revealsendlex.fcl`. Touched: `frame.tcl`
+(`ProcessRevealCmd`, `ProcessSendRevealCmd`, `RevealSendCmd`,
+`RevealSendCmdSplit`, `RevealSendCmdBar`), `xpa.tcl` (`xpacmdadd` +
+`XPASendReveal`/`XPARcvdReveal`), `comm.tcl` (both the set and get
+switches — this is what SAMP dispatches through, via `CommSet`/
+`CommGet` at `samp.tcl:785,814`), `command.tcl` (`-reveal`).
+
+### Notes on the Tcl parser toolchain
+
+Unlike the C++ side, this is **self-contained and automatic**. `ds9/
+make.include` has wildcard-driven pattern rules
+(`SRCP = $(wildcard .../*.tac)`), so dropping in new `.tac`/`.fcl`
+files is enough — no file list to update. The rules run
+`taccle -p <ns> -d` and `fickle -P <ns>`, then prepend
+`package provide DS9 1.0`, and `pkg_mkIndex` re-runs. Never hand-run
+the generators and commit the output; let `make ds9` own the generated
+`.tcl`/`.tab.tcl`.
+
+Two gotchas worth recording:
+- The bundled `taccle`/`fickle` report versions 1.4/2.2 while the
+  checked-in generated files say 1.3/2.1. This is **cosmetic only** —
+  confirmed with the maintainer that the version was bumped after the
+  fact with no code change, and a no-op regen showed the generated body
+  byte-identical apart from the banner.
+- `yes-no.trl` (nonterminals `yes`/`no`) and `yesno.trl` (nonterminal
+  `yesno`) cannot both be included — they derive from the same tokens
+  and no existing `.tac` includes both. `revealparser.tac` uses
+  `yes-no.trl` plus a two-line local `revealBar` rule instead. Verified
+  conflict-free with `taccle -w -v`.
+
+The `reveal` parser namespace coexists with the global `reveal(...)`
+array. That looks alarming but is the established pattern — `blink`,
+`tile` and `fade` all do exactly the same thing.
+
+Verified live:
+- [x] Every row of the command table above, set and get, including that
+      the split survives leaving and re-entering reveal
+- [x] `xpaset -p ds9 reveal split 0.25` drives the whole chain
+      coherently: `reveal(split)=0.25`, clip at 227px, slider thumb at
+      0.25, bar at x=227
+- [x] Menu entries present and wired (`radiobutton "Reveal Frames"
+      value=reveal`, `checkbutton "Reveal Bar"`)
+- [x] Icon bar: 5 entries with `Reveal` at index 4, and the menubutton
+      correctly switches to the reveal icon when the mode is active
+- [x] `ds9 -frame new f.fits -frame new f.fits -frame delete 1 -reveal`
+      starts directly in reveal mode
+
+Not tested live: the **SAMP** path, which needs a running hub. It is
+wired through the same `comm.tcl` switches as `blink`/`fade`, so it is
+correct by symmetry, but it has not been exercised.
+
+### Documentation
+
+- [x] `ds9/doc/ref/xpa.html`, `samp.html`, `command.html` — a `reveal`
+      entry each, in the same Syntax/Example shape as `blink`/`fade`,
+      alphabetically between `restore` and `rgb`, with the matching
+      index link. Note the reference docs live in `doc/ref`, not
+      `doc/reference`.
+- [x] `ds9/doc/release/r8.8.html` — a Beta 2 highlight plus a
+      "Reveal frames" subsection under user-facing details. These notes
+      are maintained per-feature this cycle (the recent grid dash-list
+      work is already in them), so a new display mode belongs there.
+
+The reveal entries are wordier than `fade`'s one-liner on purpose:
+reveal has a precondition (exactly two active, non-3d frames) and
+silently falls back when it is not met, so that has to be stated.
+
+Docs are copied into the bundle by `make ds9` via
+`$(LIBDIR)/doc : $(prefix)/ds9/doc` — no file list to update.
+Rendering of both the ref entry and the release note was checked in a
+browser, not just grepped.
 
 ## Phase 7 — Persistence
 

@@ -2733,6 +2733,55 @@ proc BlinkSendCmdInterval {} {
     $parse(proc) $parse(id) "[expr $blink(interval)/1000.]\n"
 }
 
+proc ProcessRevealCmd {varname iname} {
+    upvar $varname var
+    upvar $iname i
+
+    reveal::YY_FLUSH_BUFFER
+    reveal::yy_scan_string [lrange $var $i end]
+    reveal::yyparse
+    incr i [expr $reveal::yycnt-1]
+}
+
+proc ProcessSendRevealCmd {proc id param {sock {}} {fn {}}} {
+    global parse
+    set parse(proc) $proc
+    set parse(id) $id
+
+    revealsend::YY_FLUSH_BUFFER
+    revealsend::yy_scan_string $param
+    revealsend::yyparse
+}
+
+proc RevealSendCmd {} {
+    global parse
+    global current
+
+    if {$current(display)=="reveal"} {
+	$parse(proc) $parse(id) "yes\n"
+    } else {
+	$parse(proc) $parse(id) "no\n"
+    }
+}
+
+proc RevealSendCmdSplit {} {
+    global parse
+    global reveal
+
+    $parse(proc) $parse(id) "$reveal(split)\n"
+}
+
+proc RevealSendCmdBar {} {
+    global parse
+    global view
+
+    if {$view(reveal,bar)} {
+	$parse(proc) $parse(id) "yes\n"
+    } else {
+	$parse(proc) $parse(id) "no\n"
+    }
+}
+
 proc ProcessFadeCmd {varname iname} {
     upvar $varname var
     upvar $iname i

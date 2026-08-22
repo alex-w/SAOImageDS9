@@ -1,0 +1,18 @@
+#tab revealparser.tab.tcl
+
+%{
+%}
+
+#include defs.fin
+
+%%
+
+bar         {return $BAR_}
+split       {return $SPLIT_}
+
+#include yesno.fin
+#include numeric.fin
+#include string.fin
+#include ws.fin
+
+%%

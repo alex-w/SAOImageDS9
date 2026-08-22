@@ -597,6 +597,11 @@ proc CreateXPA {} {
 	XPASendMultiColor {} {} \
 	XPARcvdMultiColor {} "fillbuf=false"
 
+    xpacmdadd $xpa reveal \
+	{} \
+	XPASendReveal {} {} \
+	XPARcvdReveal {} "fillbuf=false"
+
     xpacmdadd $xpa rgb \
 	{} \
 	XPASendRGB {} {} \
@@ -935,6 +940,19 @@ proc XPARcvdBlink {xpa cdata param buf len} {
     XPADebug "XPARcvdBlink" $param
     InitError xpa
     catch {set i 0; ProcessBlinkCmd param i}
+    XPACatchError $xpa
+}
+
+proc XPASendReveal {xpa cdata param} {
+    InitError xpa
+    catch {ProcessSendRevealCmd xpasetbuf $xpa $param}
+    XPACatchError $xpa
+}
+
+proc XPARcvdReveal {xpa cdata param buf len} {
+    XPADebug "XPARcvdReveal" $param
+    InitError xpa
+    catch {set i 0; ProcessRevealCmd param i}
     XPACatchError $xpa
 }
 

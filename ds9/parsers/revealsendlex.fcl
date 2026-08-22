@@ -1,0 +1,13 @@
+#tab revealsendparser.tab.tcl
+
+%{
+%}
+
+#include defs.fin
+
+%%
+
+bar         {return $BAR_}
+split       {return $SPLIT_}
+
+%%

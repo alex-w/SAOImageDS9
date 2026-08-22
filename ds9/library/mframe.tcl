@@ -44,6 +44,8 @@ proc FrameMainMenu {} {
 	-variable current(display) -value blink -command DisplayMode
     $ds9(mb).frame add radiobutton -label [msgcat::mc {Fade Frames}] \
 	-variable current(display) -value fade -command DisplayMode
+    $ds9(mb).frame add radiobutton -label [msgcat::mc {Reveal Frames}] \
+	-variable current(display) -value reveal -command DisplayMode
     $ds9(mb).frame add separator
     $ds9(mb).frame add checkbutton -label [msgcat::mc {Reveal Bar}] \
 	-variable view(reveal,bar) -command RevealBarUpdate

@@ -188,6 +188,8 @@ proc CreateIconsBottomFrame {} {
 	current display blink DisplayMode
     IconMenuButton $mb.layout [msgcat::mc {Fade}] \
 	current display fade DisplayMode
+    IconMenuButton $mb.layout [msgcat::mc {Reveal}] \
+	current display reveal DisplayMode
 
     ConfigureIconsBottomFrame
 
@@ -213,6 +215,8 @@ proc ConfigureIconsBottomFrame {} {
 	[image create photo -file "$ds9(icons,ui)/frame_blink.png"]
     set icons(currentdisplay,fade) \
 	[image create photo -file "$ds9(icons,ui)/frame_fade.png"]
+    set icons(currentdisplay,reveal) \
+	[image create photo -file "$ds9(icons,ui)/frame_reveal.png"]
     # special case, should not be used
     set icons(currentdisplay,default) $icons(currentdisplay,single)
 
@@ -220,6 +224,7 @@ proc ConfigureIconsBottomFrame {} {
     $mb.layout.m entryconfig 1 -image $icons(currentdisplay,tile)
     $mb.layout.m entryconfig 2 -image $icons(currentdisplay,blink)
     $mb.layout.m entryconfig 3 -image $icons(currentdisplay,fade)
+    $mb.layout.m entryconfig 4 -image $icons(currentdisplay,reveal)
 
     $mb.add configure \
 	-image [image create photo -file "$ds9(icons,ui)/frame_add.png"]
