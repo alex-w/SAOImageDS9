@@ -377,6 +377,7 @@ static void setProps(unsigned short* props, unsigned short prop, int value);
 %token RESCAN_
 %token RESET_
 %token RESOLUTION_
+%token REVEAL_
 %token RGB_
 %token ROOT_
 %token ROTATE_
@@ -538,6 +539,7 @@ command : DEBUG_ debug
 	| POSTSCRIPT_ postscript
 	| RESET_ {fr->resetCmd();}
 	| REGION_ markerLayer region
+	| REVEAL_ reveal
 	| RGB_ rgb
 	| ROTATE_ rotate
 	| SAVE_ save
@@ -2898,6 +2900,10 @@ renderMethod: MIP_ {$$ = Frame3dBase::MIP;}
 renderBackground: NONE_ {$$ = Frame3dBase::NONE;}
 	| AZIMUTH_ {$$ = Frame3dBase::AZIMUTH;}
 	| ELEVATION_ {$$ = Frame3dBase::ELEVATION;}
+	;
+
+reveal	: INT {fr->revealCmd($1);}
+	| CLEAR_ {fr->revealClearCmd();}
 	;
 
 rgb	: CHANNEL_ STRING {fr->setRGBChannelCmd($2);}

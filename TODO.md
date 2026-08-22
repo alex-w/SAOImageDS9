@@ -67,29 +67,70 @@ Notes for later phases:
   untouched when `revealWidth == -1` (the default, so no behavior change
   for existing display modes).
 
-## Phase 2 — C++: command wiring — REVISED, avoids bison/flex
+## Phase 2 — C++: grammar wiring — DONE
 
-Original plan (grammar rule in `parser.Y`/`lex.L`, regenerated via
-`bison`/`flex`) is on hold: those generated files are tied to an old
-bison version (the one macOS ships), and upgrading them is a known can
-of worms — do not touch `.Y`/`.L` files for this feature.
+Decision: use the `parser.Y`/`lex.L` grammar route, matching how `fade`
+and every other frame subcommand are implemented, rather than the
+`WidgetObjParse` direct-dispatch shortcut (considered, rejected for
+consistency with the existing architecture — see note below).
 
-Workaround found instead: `WidgetObjParse` (`tksao/widget/widget.C:174-
-204`) — the single dispatch point every frame Tcl subcommand passes
-through — already special-cases `config` and `pdf` via plain
-`strcmp`/`strncmp` on `objv[1]`, handled directly in C++ *before*
-falling through to the bison-generated `parse()` grammar in its `else`
-branch. `reveal` can be added the same way, as a third special case,
-with zero grammar/bison/flex involvement. (Note: `WidgetParse`, the
-non-`Obj` sibling, is dead code — declared but never registered with
-Tcl — so only `WidgetObjParse` needs the new case.)
+Version risk (bison/flex): **retired.** The Mac's stock toolchain is
+bison **2.3** and flex **2.6.4**, which are exactly the versions stamped
+in the checked-in `parser.C` (`made by GNU Bison 2.3`) and `lex.C`
+(`YY_FLEX 2.6.4`). Verified empirically before editing anything: ran
+`make parser` with no source changes and `git diff` was **zero lines**
+across `parser.C`/`lex.C`/`parser.H` — regeneration is byte-identical,
+so any diff is only our own change. No Homebrew bison on `PATH`; keep it
+that way, since bison 3.x would rewrite these files wholesale.
 
-- [ ] Add a `reveal` special case to `WidgetObjParse`
-      (`widget.C:174-204`), alongside the existing `config`/`pdf` cases:
-      `reveal <width>` → `revealCmd(width)`, `reveal clear` →
-      `revealClearCmd()`
-- [ ] Rebuild via `make tksaoclean tksao ds9clean ds9`, confirm clean
-      compile (same workflow as Phase 1 — no bison/flex step needed)
+- [x] Add `REVEAL_` token to `tksao/frame/lex.L` — `reveal {return
+      REVEAL_;}`, placed alphabetically after `resolution` (`lex.L:300`)
+- [x] Add `%token REVEAL_` to `tksao/frame/parser.Y` (`parser.Y:380`,
+      after `RESOLUTION_`)
+- [x] Add `| REVEAL_ reveal` to the top-level `command` list
+      (`parser.Y:542`)
+- [x] Add grammar rule (`parser.Y:2905`, alphabetically before `rgb`):
+      `reveal : INT {fr->revealCmd($1);} | CLEAR_ {fr->revealClearCmd();}`
+      — `fr` is `Base*` and `class Base : public Widget` (`base.h:82`),
+      so this resolves directly to the Phase 1 `Widget::revealCmd`; no
+      virtual stub in `base.h` (unlike `fadeCmd`/`fadeClearCmd` at
+      `base.h:814`)
+- [x] Regenerated via `make parser` from `tksao/` — bison reported no
+      grammar conflicts; diff confined to the 5 expected files
+      (`lex.L`, `parser.Y` + generated `lex.C`, `parser.C`, `parser.H`);
+      no unrelated parsers touched
+- [x] Rebuilt (`make tksaoclean tksao ds9clean ds9`) — no errors. The
+      one warning in `parser.C` (`variable 'frnerrs' set but not used`)
+      is pre-existing bison boilerplate; every untouched generated
+      parser (`ciaoparser.C`, `saoparser.C`, ...) emits its own copy.
+- [x] Smoke-tested live over XPA (see Testing notes below) — grammar
+      accepts, clip renders, `clear` round-trips
+
+Deviation from the original plan — **`INT`, not `numeric`**: the draft
+rule mirrored `fade`, but `numeric` is `%type <real>` (double) matching
+`fadeCmd(float)`, whereas `revealCmd(int)` takes an int. Bare `INT`
+(`%token <integer>`) is well-precedented here for integer setters
+(`threadsCmd`, `binDepthCmd`, `irafAlignCmd`). Used `INT` — no cast
+needed.
+
+**Carry-forward for Phase 4:** because the rule takes `INT`, the Tcl
+side must pass an integer. `$fr reveal [expr {int($frac*$w)}]`, never a
+bare float — `reveal 1.5` is a hard `syntax error` at runtime
+(verified). This is the one sharp edge the `INT` choice introduces.
+
+Build gotcha (applies to any future `.Y`/`.L` change): `make parser` is
+a **dependency-free phony target** (`tksao/Makefile.in:232`) — plain
+`make tksaoclean tksao` does *not* regenerate. The correct sequence is
+`make parser` from `tksao/` first, then `make tksaoclean tksao ds9clean
+ds9` from the top. Use the narrow `parser` target, not `make parsers`,
+which would regenerate every grammar in the tree and invite unrelated
+drift.
+
+Note: `WidgetObjParse` (`tksao/widget/widget.C:174-204`) does special-
+case `config`/`pdf` via plain `strcmp` before falling through to the
+bison-generated grammar, which would have let `reveal` skip bison/flex
+entirely. Not used here — grammar-based wiring keeps `reveal` consistent
+with `fade` and the rest of the frame command surface.
 
 ## Phase 3 — Tcl: display-mode plumbing (`ds9/library`)
 
@@ -146,6 +187,24 @@ Tcl — so only `WidgetObjParse` needs the new case.)
       session files
 
 ## Phase 8 — Testing
+
+Already validated during Phase 2 (single frame, via the XPA `tcl` entry
+point — see "How to smoke-test" in `AGENTS.md`):
+
+- [x] Grammar acceptance: `reveal 400` → ok, `reveal 0` → ok,
+      `reveal clear` → ok; negative controls `reveal bogus` and
+      `reveal 1.5` both correctly fail with `syntax error`, proving the
+      rule is genuinely parsing rather than silently swallowing input
+- [x] The clip actually renders: loaded `funtools/funtest/test.fits`
+      into a 914x480 frame, `reveal 457` produced a hard pixel edge at
+      x=457 with the left half fully intact and the right half absent —
+      confirms Phase 1's `displayProc` clip end-to-end
+- [x] `reveal clear` restores rendering **byte-identically** to the
+      pre-clip PNG capture (same sha256) — no stale clip, which is the
+      Phase 8 "round-trip toggling" item's core concern at the C++ level
+
+Still to do (all require Phase 3+ two-frame plumbing):
+
 
 - [ ] Two frames, different zoom/pan/colormap — verify hard clip is
       visually correct at slider extremes and midpoint
