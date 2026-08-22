@@ -485,50 +485,88 @@ Verified live:
       `Show Bar` &rarr; `pview(reveal,bar)`, `Bar Color` &rarr;
       `preveal(bar,color)`, 11 colours)
 
-## Phase 8 — Testing
+## Phase 8 — Testing — MOSTLY DONE
 
-Already validated during Phase 2 (single frame, via the XPA `tcl` entry
-point — see "How to smoke-test" in `AGENTS.md`):
+### Regression tests added to the suite
 
-- [x] Grammar acceptance: `reveal 400` → ok, `reveal 0` → ok,
-      `reveal clear` → ok; negative controls `reveal bogus` and
-      `reveal 1.5` both correctly fail with `syntax error`, proving the
-      rule is genuinely parsing rather than silently swallowing input
-- [x] The clip actually renders: loaded `funtools/funtest/test.fits`
-      into a 914x480 frame, `reveal 457` produced a hard pixel edge at
-      x=457 with the left half fully intact and the right half absent —
-      confirms Phase 1's `displayProc` clip end-to-end
-- [x] `reveal clear` restores rendering **byte-identically** to the
-      pre-clip PNG capture (same sha256) — no stale clip, which is the
-      Phase 8 "round-trip toggling" item's core concern at the C++ level
+`Tests/` is a **separate git repo** (`SAOImageDS9/Tests`), untracked by
+the main repo, so these changes are uncommitted *there*, not here.
 
-Also validated during Phase 3 (two frames, live):
+- [x] `Tests/xpa.sh` — a `reveal` block (alphabetical, before `rgb`)
+      exercising get of `reveal`/`reveal split`/`reveal bar` and set of
+      every verb, plus a golden file `Tests/xpa/reveal.xpa`
+      (`no` / `.5` / `yes`)
+- [x] `Tests/command.sh` — a `reveal` block covering `-reveal`,
+      `-reveal yes|no`, `-reveal split`, `-reveal bar`
+- [x] `Tests/samp.sh` + new `Tests/samp/reveal.samp` — the same verbs
+      over SAMP
 
-- [x] Two frames with different colormaps — hard clip visually correct
-      at 0.0 / .25 / .5 / .6 / 1.0
-- [x] Fallback correctness: 1 / 3 active frames, and a `3d` frame
-      present — including the dynamic case where the frame count changes
-      while reveal is already active
-- [x] Round-trip toggling reveal ↔ tile/single — `revealClearCmd` runs
-      on exit, `ireveal(split)` returns to -1, no stale clip
+Run individually (do **not** run the whole suite — it is slow and hits
+external services):
 
-Still to do:
+```
+cd Tests
+PATH=/path/to/reveal/bin:$PATH sh xpa.sh reveal
+PATH=/path/to/reveal/bin:$PATH sh command.sh reveal
+PATH=/path/to/reveal/bin:$PATH sh samp.sh reveal
+```
 
-- [ ] **SAMP** — the one integration path never exercised. Wired through
-      the same `comm.tcl` `CommSet`/`CommGet` switches as `blink`/`fade`
-      (which is what `samp.tcl:785,814` dispatch through), but it needs
-      a running hub. Check `reveal`, `reveal split` and `reveal bar`,
-      set and get.
+All three pass. The xpa golden file was checked to be a real assertion,
+not a vacuous one: corrupting it to `.99` produces `FAILED` with a diff,
+and restoring it produces `PASSED`. Note `command.sh`'s `doit` prints
+`PASSED` unconditionally by design — it is a smoke test that ds9 accepts
+the options and exits, not an output assertion.
 
-- [ ] Two frames, different zoom/pan/colormap — verify hard clip is
-      visually correct at slider extremes and midpoint
-- [ ] Region creation/selection/editing on **both** sides of the split
-      (validates the `pointProc` fix)
-- [ ] Region work near the **bottom edge** of the frame, where the
-      slider overlays the lowest 18 pixels
-- [ ] Window resize while in reveal mode (canvas `<Configure>` →
-      `LayoutView`)
-- [ ] Fallback correctness: 0/1/3+ active frames, and a `3d` frame present
-- [ ] Round-trip toggling reveal ↔ **blink/fade** specifically (tile
-      and single already covered above)
-- [ ] Session save/restore with reveal active
+Caveat: `Tests/samp.tcl` hardcodes source paths into a **sibling
+checkout** (`/Users/kjg/DS9/SAOImageDS9/...`). Those files are SAMP
+client plumbing, unrelated to reveal, so the test is valid — but the
+harness will not run without that checkout present.
+
+### Verified
+
+- [x] **SAMP** — the Phase 6 hold-out. `get reveal` &rarr; `no`,
+      `get reveal split` &rarr; `.5`, `get reveal bar` &rarr; `yes`, and
+      every setter returns `samp.ok`. No longer "correct by symmetry".
+- [x] **Hit-testing across the split** — the direct validation of the
+      Phase 1 `pointProc`/`areaProc` change. With the split at 455,
+      canvas `find closest` returns the *first* (clipped, top) frame at
+      x=453 and the *second* frame at x=457. `find overlapping` and
+      canvas focus agree. So the clipped-away region of the top frame
+      really does read as "outside" and events fall through to the
+      frame beneath.
+- [x] Two frames, different zoom/pan/colormap — hard clip correct at
+      0.0 / .25 / .5 / .6 / .75 / 1.0
+- [x] Window resize in reveal mode — slider length and position and the
+      clip all rescale (the split is a fraction, so it survives)
+- [x] Fallbacks: 1 / 3 active frames and a 3d frame, including the
+      dynamic case where the count changes while reveal is active
+- [x] **Round-trip reveal ↔ single / tile / blink / fade** — on every
+      exit `ireveal(split)` returns to -1 and the bar and slider canvas
+      items are deleted; on re-entry all three come back at the
+      remembered split. Blink and fade timers start and stop correctly
+      across the transitions.
+- [x] Session save/restore and prefs round-trip (Phase 7)
+
+### Still needs a human with a mouse
+
+Synthetic `event generate` input proved unreliable against Tk's canvas
+current-item tracking — it fired the frame bindings once and then
+stopped, at identical coordinates, with the bindings, hit-test, focus
+and button-state flags all verified correct in between. A control in
+`single` mode created a region from the same synthetic drag, so the
+harness itself works; the flakiness is in synthetic-vs-real pointer
+events, not in reveal. These two therefore remain unverified:
+
+- [ ] Region create / select / edit **interactively** on both sides of
+      the split, with a real mouse
+- [ ] Region work near the **bottom edge**, where the slider overlays
+      the lowest 18 pixels of the frame
+
+Worth knowing while testing that by hand: `Button1Frame`
+(`frame.tcl`) is click-to-focus. Clicking a frame that is not
+`current(frame)` only calls `GotoFrame` and returns — the region is
+created on the *second* click. In reveal this means the first click
+after crossing the split switches frames and the next one draws. That
+is pre-existing behaviour shared with tile mode, not something reveal
+introduces, but it is more noticeable here because the two frames
+occupy the same screen area.
