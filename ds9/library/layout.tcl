@@ -82,8 +82,16 @@ proc RevealDef {} {
     set ireveal(slider,sync) 0
     set ireveal(slider,fromslider) 0
 
+    # canvas item id of the demarcation bar; 0 means not on the canvas
+    set ireveal(bar,id) 0
+
     # split position as a fraction of the frame width
     set reveal(split) .5
+
+    # demarcation bar appearance. whether it is drawn at all is
+    # view(reveal,bar), alongside the other view toggles
+    set reveal(bar,color) cyan
+    set reveal(bar,width) 1
 
     array set preveal [array get reveal]
 }
@@ -120,6 +128,7 @@ proc ViewDef {} {
     set view(colorbar) 1
     set view(graph,horz) 0
     set view(graph,vert) 0
+    set view(reveal,bar) 1
 
     set view(info,filename) 1
     set view(info,object) 1
@@ -718,8 +727,9 @@ proc LayoutFrames {} {
     GraphHide graph horz
     GraphHide graph vert
 
-    # turn off reveal slider
+    # turn off reveal slider and bar
     RevealSliderHide
+    RevealBarHide
 
     # all frames turn everything off
     foreach ff $ds9(frames) {
@@ -1014,6 +1024,8 @@ proc RevealUpdateClip {} {
     if {!$ireveal(slider,fromslider)} {
 	RevealSliderSync
     }
+
+    RevealBarUpdate
 }
 
 # drop any reveal clip. all frames, not just active ones, so a frame that
@@ -1105,6 +1117,57 @@ proc RevealSliderCmd {vv} {
     set ireveal(slider,fromslider) 1
     RevealUpdateClip
     set ireveal(slider,fromslider) 0
+}
+
+# the demarcation bar marks the split line. a plain canvas line, and
+# deliberately not tagged 'graphic' -- that tag belongs to user
+# illustrate items and would pull the bar into that machinery.
+proc RevealBarUpdate {} {
+    global ds9
+    global ireveal
+    global reveal
+    global view
+
+    if {!$view(reveal,bar) ||
+	$ds9(display) != {reveal} ||
+	[llength $ds9(active)] != 2} {
+	RevealBarHide
+	return
+    }
+
+    set first [lindex $ds9(active) 0]
+    set fx [$ds9(canvas) itemcget $first -x]
+    set fy [$ds9(canvas) itemcget $first -y]
+    set fh [$ds9(canvas) itemcget $first -height]
+
+    set xx [expr {$fx+$ireveal(split)}]
+    set yy [expr {$fy+$fh}]
+
+    if {!$ireveal(bar,id)} {
+	set ireveal(bar,id) [$ds9(canvas) create line $xx $fy $xx $yy \
+				 -fill $reveal(bar,color) \
+				 -width $reveal(bar,width) \
+				 -tags {revealbar}]
+    } else {
+	$ds9(canvas) coords $ireveal(bar,id) $xx $fy $xx $yy
+	$ds9(canvas) itemconfigure $ireveal(bar,id) \
+	    -fill $reveal(bar,color) \
+	    -width $reveal(bar,width)
+    }
+
+    # above both frames. the slider is a window item and so floats above
+    # this regardless, which is what we want.
+    $ds9(canvas) raise $ireveal(bar,id)
+}
+
+proc RevealBarHide {} {
+    global ds9
+    global ireveal
+
+    if {$ireveal(bar,id)} {
+	$ds9(canvas) delete $ireveal(bar,id)
+	set ireveal(bar,id) 0
+    }
 }
 
 proc LayoutFrame {} {

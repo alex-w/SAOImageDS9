@@ -274,18 +274,68 @@ re-rendering them. If that ever changes, revisit this.
 hit the slider rather than the frame. Worth confirming this does not get
 in the way of region creation/editing near the bottom edge of the image.
 
-## Phase 5 — Tcl: demarcation bar
+## Phase 5 — Tcl: demarcation bar — DONE
 
-- [ ] Add `view(reveal,bar)` pref (boolean) in `ViewDef`
-- [ ] Canvas line item at the slider's x-position, raised above both
-      frames, shown/hidden per the pref
-- [ ] Toggle wired into a menu checkbutton (and/or a small "Reveal
-      Parameters" dialog, modeled on `TileDialog`)
+- [x] `view(reveal,bar)` boolean in `ViewDef` (default on), so it rides
+      along in `pview` with the other view toggles
+- [x] Canvas line item at the split, full frame height, raised above
+      both frames, shown/hidden per the pref — `RevealBarUpdate` /
+      `RevealBarHide` in `layout.tcl`
+- [x] Toggle wired to a `Reveal Bar` checkbutton in `FrameMainMenu`
+      (`mframe.tcl`), just below the display-mode radiobuttons
+
+Appearance lives in `reveal(bar,color)` (default `cyan`, following
+`threed(highlite,color)`, the closest existing precedent for a UI
+overlay line) and `reveal(bar,width)` (default 1). Only the on/off
+boolean is exposed in the menu; the colour/width are prefs with no UI
+yet. Note the pref is deliberately split across two arrays — the
+visibility toggle in `view` with the other view toggles as the plan
+specified, the appearance in `reveal` with the rest of the reveal state.
+
+`RevealBarUpdate` is called from the tail of `RevealUpdateClip`, so the
+bar follows the split for free on drags, layout passes and resizes
+without a separate update path. `RevealBarHide` is called from
+`LayoutFrames` next to `RevealSliderHide`.
+
+The bar is **not** tagged `graphic`. That tag marks user illustrate
+items and is what `LayoutRaise` treats as its ceiling; tagging the bar
+with it would pull a piece of chrome into the illustrate machinery. It
+gets an explicit `$ds9(canvas) raise` instead, which puts it above both
+frames. The slider is a canvas *window* item and so still floats above
+the bar, which is the wanted order.
+
+No `TileDialog`-style "Reveal Parameters" dialog was added — the single
+boolean did not justify one. If colour/width ever want UI, that is the
+moment to build it.
+
+Verified live with **two frames sharing one colormap** (grey/grey,
+different zoom), so the bar is the only thing marking the split:
+- [x] Bar drawn full height at the split, clearly visible over both
+      frames, slider thumb aligned directly beneath it
+- [x] Toggling `view(reveal,bar)` off deletes the item, on recreates it
+- [x] Bar tracks the split while the slider moves (x=180 at .2, x=720
+      at .8)
+- [x] Leaving reveal removes the bar; re-entering restores it at the
+      remembered split
+- [x] Menu entry present and correctly wired
+      (`checkbutton "Reveal Bar" var=view(reveal,bar) cmd=RevealBarUpdate`)
+
+**Carry-forward for Phase 7:** `view(reveal,bar)` is already inside
+`pview` via `ViewDef`, so it should round-trip with the existing view
+prefs. `reveal(split)`, `reveal(bar,color)` and `reveal(bar,width)` land
+in `preveal`, which is a **new array that still needs registering** in
+`prefs.tcl`.
 
 ## Phase 6 — Menu / command integration
 
 - [ ] Add `Reveal Frames` radiobutton to `FrameMainMenu` in `mframe.tcl`
-      (`-variable current(display) -value reveal`)
+      (`-variable current(display) -value reveal`), alongside the
+      `Fade Frames` entry — Phase 5 already added a `Reveal Bar`
+      checkbutton just below that group
+- [ ] Add `icons(currentdisplay,reveal)` in `iconsbottom.tcl` plus the
+      matching `$mb.layout.m entryconfig` line; without it the bottom
+      icon bar shows the *single* icon while reveal is active (it
+      degrades via `icons(currentdisplay,default)`, so this is cosmetic)
 - [ ] Add XPA/SAMP parity: confirm `display reveal` flows through the
       existing generic mode-set path; add `Process*Cmd`/`SendCmd` pairs
       for slider position if it should be scriptable (pattern at
