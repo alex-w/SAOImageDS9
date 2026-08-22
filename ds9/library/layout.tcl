@@ -75,6 +75,13 @@ proc RevealDef {} {
     # current split in canvas pixels; -1 means no clip is applied
     set ireveal(split) -1
 
+    # canvas item id of the embedded slider; 0 means not on the canvas.
+    # the widget path is built lazily, since ds9(main) does not exist yet
+    set ireveal(slider,id) 0
+    set ireveal(slider,height) 18
+    set ireveal(slider,sync) 0
+    set ireveal(slider,fromslider) 0
+
     # split position as a fraction of the frame width
     set reveal(split) .5
 
@@ -711,6 +718,9 @@ proc LayoutFrames {} {
     GraphHide graph horz
     GraphHide graph vert
 
+    # turn off reveal slider
+    RevealSliderHide
+
     # all frames turn everything off
     foreach ff $ds9(frames) {
 	$ff hide
@@ -889,6 +899,7 @@ proc LayoutFrameReveal {} {
     global view
     global current
     global colorbar
+    global ireveal
 
     set ww [winfo width $ds9(canvas)]
     set hh [winfo height $ds9(canvas)]
@@ -926,6 +937,16 @@ proc LayoutFrameReveal {} {
     # frames: unlike the other modes, both are shown at once
     RevealRaise
     RevealUpdateClip
+
+    # slider, along the bottom edge of the frame area. same geometry the
+    # frames themselves got above
+    set sx 0
+    set sy 0
+    LayoutFrameOriginAdjust sx sy
+    set sw $ww
+    set sh $hh
+    LayoutFrameAdjust sw sh
+    RevealSliderShow $sx [expr {$sy+$sh-$ireveal(slider,height)}] $sw
 
     # colorbar: follows current(frame) only, same as single mode
     if {$view(colorbar) && $colorbar(show)} {
@@ -986,6 +1007,13 @@ proc RevealUpdateClip {} {
 
     set ireveal(split) $xx
     catch {$first reveal $xx}
+
+    # keep the slider thumb in step with reveal(split), so setting the
+    # split from anywhere else (a command, a restored pref) moves the
+    # slider too. skipped when the slider itself is what drove us here.
+    if {!$ireveal(slider,fromslider)} {
+	RevealSliderSync
+    }
 }
 
 # drop any reveal clip. all frames, not just active ones, so a frame that
@@ -1001,6 +1029,82 @@ proc RevealClear {} {
     }
 
     set ireveal(split) -1
+}
+
+# the slider is a bare ttk::scale embedded in the canvas, following the
+# same create-window/delete pattern the graphs use. it is a child of
+# ds9(main) rather than the canvas, matching how the graphs are parented.
+proc RevealSliderShow {xx yy ww} {
+    global ds9
+    global ireveal
+    global reveal
+
+    set sl $ds9(main).revealslider
+
+    if {![winfo exists $sl]} {
+	ttk::scale $sl \
+	    -orient horizontal \
+	    -from 0 -to 1 \
+	    -takefocus 0 \
+	    -command RevealSliderCmd
+    }
+
+    $sl configure -length $ww
+
+    RevealSliderSync
+
+    if {!$ireveal(slider,id)} {
+	set ireveal(slider,id) \
+	    [$ds9(canvas) create window $xx $yy -window $sl -anchor nw]
+    } else {
+	$ds9(canvas) coords $ireveal(slider,id) $xx $yy
+    }
+
+    # canvas raise has no affect on windows
+    raise $sl
+}
+
+proc RevealSliderHide {} {
+    global ds9
+    global ireveal
+
+    if {$ireveal(slider,id)} {
+	$ds9(canvas) delete $ireveal(slider,id)
+	set ireveal(slider,id) 0
+    }
+}
+
+# move the thumb to match reveal(split) without re-triggering the clip
+proc RevealSliderSync {} {
+    global ds9
+    global ireveal
+    global reveal
+
+    set sl $ds9(main).revealslider
+    if {![winfo exists $sl]} {
+	return
+    }
+
+    set ireveal(slider,sync) 1
+    $sl set $reveal(split)
+    set ireveal(slider,sync) 0
+}
+
+proc RevealSliderCmd {vv} {
+    global reveal
+    global ireveal
+
+    # ignore the callback our own [$sl set] triggers
+    if {$ireveal(slider,sync)} {
+	return
+    }
+
+    set reveal(split) $vv
+
+    # the thumb is already where the user put it, no need to sync it back
+    set ireveal(slider,fromslider) 1
+    RevealUpdateClip
+    set ireveal(slider,fromslider) 0
 }
 
 proc LayoutFrame {} {

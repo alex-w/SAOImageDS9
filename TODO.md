@@ -211,23 +211,68 @@ while reveal is active. It degrades gracefully (no error), but Phase 6
 should add `icons(currentdisplay,reveal)` and the matching
 `$mb.layout.m entryconfig` line.
 
-## Phase 4 — Tcl: slider UI
+## Phase 4 — Tcl: slider UI — DONE
 
-- [ ] New slider control (bare `ttk::scale`, not the heavier `slider.tcl`
-      widget) embedded via `canvas create window`, positioned at the
-      bottom edge of the frame bbox, resized in `LayoutView`/`LayoutFrames`
-- [ ] Wire the slider `-command` to set `reveal(split)` (a fraction)
-      and call `RevealUpdateClip` — Phase 3 already added that proc and
-      it handles the fraction → pixel conversion, the `int()` rounding
-      the `INT` grammar rule needs, and clamping. The slider callback
-      should not call `[first] reveal ...` directly. It still needs to
-      move the demarcation line (Phase 5).
-- [ ] Show/hide slider (and destroy/recreate on resize) mirroring how
-      panner/magnifier are packed/forgotten in `LayoutViewInit`
-- [ ] Evaluate drag-event rate; adapt the existing `MotionDispatch`
-      coalescing pattern (`layout.tcl:363`, currently Aqua-only) to all
-      platforms if dragging feels choppy — likely a non-issue now since
-      redraw is cheap, but worth checking on a large image
+- [x] Bare `ttk::scale` (not the composite `slider.tcl` widget, which is
+      a label+scale+entry+ticks assembly meant for dialogs), embedded
+      via `canvas create window`, spanning the frame width at the bottom
+      edge of the frame bbox, repositioned on every layout pass
+- [x] Slider `-command` → `RevealSliderCmd`, which sets `reveal(split)`
+      and calls `RevealUpdateClip` (the Phase 3 proc already handles the
+      fraction → pixel conversion, `int()` rounding and clamping)
+- [x] Show/hide across mode changes and resize
+- [x] Drag-event rate evaluated — see below
+
+Widget is `$ds9(main).revealslider`, parented to `ds9(main)` rather than
+the canvas, matching how the graphs are parented. Created lazily on
+first show, since `ds9(main)` does not exist yet when `RevealDef` runs.
+
+Deviation from the plan — **show/hide follows `GraphShow`/`GraphHide`,
+not `LayoutViewInit`'s pack/forget.** Panner and magnifier are
+grid/pack-managed panels in the `ds9(main)` grid; the slider is a canvas
+window item, so the right analogue is the graphs' create-window/delete
+pattern: `RevealSliderHide` deletes the canvas item (keeping the widget
+for reuse) and is called from `LayoutFrames` alongside `colorbar hide`
+and `GraphHide`, while `RevealSliderShow` re-creates it from
+`LayoutFrameReveal`. That way every mode change and every resize goes
+through the existing hide-everything-then-show-what-is-needed pass with
+no special-casing.
+
+Note `raise $sl` after placing it: as the graph code already comments,
+canvas `raise` has no effect on window items, and embedded Tk windows
+always float above canvas items — so the slider is never occluded by
+either frame.
+
+**Two-way sync.** `RevealUpdateClip` also moves the thumb, via
+`RevealSliderSync`. Without this the thumb only tracked `reveal(split)`
+on a layout pass, so setting the split from anywhere else left the
+slider visibly wrong — found by screenshot: the clip sat at 50% while
+the thumb was pinned to the far right. This matters for Phase 6 (an XPA
+command setting the split) and Phase 7 (a restored pref). Two flags keep
+it from chasing its own tail: `ireveal(slider,sync)` makes
+`RevealSliderCmd` ignore the callback that `[$sl set]` triggers, and
+`ireveal(slider,fromslider)` stops `RevealUpdateClip` from pushing the
+thumb back at the user mid-drag.
+
+**Drag rate: no coalescing needed.** Measured on this Mac:
+
+| | ms/update | sustainable rate |
+|---|---|---|
+| `RevealUpdateClip` alone | 0.009 | — |
+| full redraw, 900x650 canvas | 3.6 | ~280/sec |
+| full redraw, 1600x707 canvas @ zoom 40 | 8.8 | ~113/sec |
+
+Even the large-canvas worst case clears the 60-120 events/sec a mouse
+drag can produce, so the `MotionDispatch` coalescing the plan floated
+(`layout.tcl:363`, Aqua-only) is unnecessary. The reason it is this
+cheap is Phase 1's choice to call `redraw()` rather than
+`invalidPixmap()` — dragging re-blits cached pixmaps instead of
+re-rendering them. If that ever changes, revisit this.
+
+**Carry-forward for Phase 8:** the slider occupies the bottom
+`ireveal(slider,height)` (18) pixels of the frame area, so clicks there
+hit the slider rather than the frame. Worth confirming this does not get
+in the way of region creation/editing near the bottom edge of the image.
 
 ## Phase 5 — Tcl: demarcation bar
 
@@ -287,6 +332,8 @@ Still to do:
       visually correct at slider extremes and midpoint
 - [ ] Region creation/selection/editing on **both** sides of the split
       (validates the `pointProc` fix)
+- [ ] Region work near the **bottom edge** of the frame, where the
+      slider overlays the lowest 18 pixels
 - [ ] Window resize while in reveal mode (canvas `<Configure>` →
       `LayoutView`)
 - [ ] Fallback correctness: 0/1/3+ active frames, and a `3d` frame present
