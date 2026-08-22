@@ -127,6 +127,10 @@ class Widget {
   GC widgetGC;                // gc for pixmap XCopyArea
   int visible;                // redraw when true
 
+  // reveal clip: limit the displayed pixmap to columns [0,revealWidth),
+  // in item-local pixels; -1 means disabled (draw the full item)
+  int revealWidth;
+
   int originX;                // widget upper left origin
   int originY;                // widget upper left origin
 
@@ -211,6 +215,8 @@ class Widget {
 
   // Subcommand Functions
   void getCmd();
+  void revealCmd(int width);        // clip displayed pixmap to [0,width)
+  void revealClearCmd();            // remove the reveal clip
   int configCmd(Tcl_Size, const char**); // configure command
   void getHeightCmd();              // return height of widget
   void getWidthCmd();               // return width of widget

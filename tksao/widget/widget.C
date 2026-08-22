@@ -224,6 +224,7 @@ Widget::Widget(Tcl_Interp* interp_, Tk_Canvas canvas_, Tk_Item* item) :
   pixmap = 0;
   widgetGC = NULL;
   visible = True;
+  revealWidth = -1;
 
   originX = 0;
   originY = 0;
@@ -401,7 +402,7 @@ void Widget::displayProc(Drawable draw, int clipX, int clipY,
   if (clipY > options->item.y1) {
     pmY = clipY - options->item.y1;
     pmHeight = options->item.y2 - clipY;
-  } 
+  }
   else {
     pmY = 0;
     if ((clipY + clipHeight) < options->item.y2)
@@ -409,6 +410,16 @@ void Widget::displayProc(Drawable draw, int clipX, int clipY,
     else
       pmHeight = options->item.y2 - options->item.y1;
   }
+
+  // reveal clip: further restrict to pixmap columns [0,revealWidth)
+  if (revealWidth >= 0) {
+    int pmRight = pmX + pmWidth;
+    if (pmRight > revealWidth)
+      pmRight = revealWidth;
+    pmWidth = pmRight - pmX;
+  }
+  if (pmWidth <= 0 || pmHeight <= 0)
+    return;
 
   // convert to canvas coords
   short drawX, drawY;
@@ -429,10 +440,17 @@ double Widget::pointProc(double* point)
 {
   double xdiff, ydiff;
 
+  // if a reveal clip is active, treat the clipped-away area as outside
+  // the item, so hit-testing (region selection, etc.) falls through to
+  // whatever is actually visible there
+  double x2 = options->item.x2;
+  if (revealWidth >= 0 && options->item.x1 + revealWidth < x2)
+    x2 = options->item.x1 + revealWidth;
+
   if (point[0] < options->item.x1)
     xdiff = options->item.x1 - point[0];
-  else if (point[0] > options->item.x2)
-    xdiff = point[0] - options->item.x2;
+  else if (point[0] > x2)
+    xdiff = point[0] - x2;
   else
     xdiff = 0;
 
@@ -448,12 +466,18 @@ double Widget::pointProc(double* point)
 
 int Widget::areaProc(double* bbox)
 {
-  if ((bbox[2] <= options->item.x1) || (bbox[0] >= options->item.x2) ||
+  // if a reveal clip is active, treat the clipped-away area as outside
+  // the item, consistent with pointProc and displayProc
+  int x2 = options->item.x2;
+  if (revealWidth >= 0 && options->item.x1 + revealWidth < x2)
+    x2 = options->item.x1 + revealWidth;
+
+  if ((bbox[2] <= options->item.x1) || (bbox[0] >= x2) ||
       (bbox[3] <= options->item.y1) || (bbox[1] >= options->item.y2))
     return -1; // item is outside bbox
 
   if ((bbox[0] <= options->item.x1) && (bbox[1] <= options->item.y1) &&
-      (bbox[2] >= options->item.x2) && (bbox[3] >= options->item.y2))
+      (bbox[2] >= x2) && (bbox[3] >= options->item.y2))
     return 1; // item is inside bbox
 
   return 0;   // item overlaps bbox
@@ -495,6 +519,19 @@ void Widget::translateProc(double deltaX, double deltaY)
 void Widget::getCmd()
 {
   frameptr_ = this;
+}
+
+void Widget::revealCmd(int width)
+{
+  // just a repaint clip, no content change-- do not invalidate the pixmap
+  revealWidth = width;
+  redraw();
+}
+
+void Widget::revealClearCmd()
+{
+  revealWidth = -1;
+  redraw();
 }
 
 int Widget::configCmd(Tcl_Size argc, const char** argv)
