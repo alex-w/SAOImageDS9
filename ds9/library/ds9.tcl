@@ -403,6 +403,7 @@ PixelDef
 PlotDef
 PrefsDef
 PSDef
+RevealDef
 RGBDef
 MultiColorDef
 HSVDef

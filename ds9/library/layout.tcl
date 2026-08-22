@@ -67,6 +67,20 @@ proc FadeDef {} {
     array set pfade [array get fade]
 }
 
+proc RevealDef {} {
+    global reveal
+    global ireveal
+    global preveal
+
+    # current split in canvas pixels; -1 means no clip is applied
+    set ireveal(split) -1
+
+    # split position as a fraction of the frame width
+    set reveal(split) .5
+
+    array set preveal [array get reveal]
+}
+
 proc TileDef {} {
     global tile
     global itile
@@ -794,6 +808,7 @@ proc LayoutFramesOneOrMore {} {
 	fade -
 	blink -
 	single {LayoutFrameOne}
+	reveal {LayoutFrameReveal}
 	tile {
 	    if {[llength $ds9(active)] > 1} {
 		if {$view(multi)} {
@@ -867,6 +882,125 @@ proc LayoutFrameOne {} {
     }
 
     FrameToFront
+}
+
+proc LayoutFrameReveal {} {
+    global ds9
+    global view
+    global current
+    global colorbar
+
+    set ww [winfo width $ds9(canvas)]
+    set hh [winfo height $ds9(canvas)]
+
+    # both frames are layed out identically, full size, fully overlapping
+    foreach ff $ds9(active) {
+	ColorbarGlobalSetFromFrame $ff
+	LayoutColorbarAdjust
+	set fw $ww
+	set fh $hh
+
+	# frame
+	set fx 0
+	set fy 0
+	LayoutFrameOriginAdjust fx fy
+	LayoutFrameAdjust fw fh
+	$ff configure -x $fx -y $fy -width $fw -height $fh -anchor nw
+
+	# colorbar
+	if {$view(colorbar) && $colorbar(show)} {
+	    LayoutColorbar ${ff}cb 0 0 $ww $hh
+	}
+
+	# graphs
+	if {$view(graph,horz)} {
+	    LayoutGraphHorz $ff 0 0 $ww $hh
+	    UpdateGraphAxis $ff horz
+	}
+	if {$view(graph,vert)} {
+	    LayoutGraphVert $ff 0 0 $ww $hh
+	    UpdateGraphAxis $ff vert
+    	}
+    }
+
+    # frames: unlike the other modes, both are shown at once
+    RevealRaise
+    RevealUpdateClip
+
+    # colorbar: follows current(frame) only, same as single mode
+    if {$view(colorbar) && $colorbar(show)} {
+	$current(colorbar) show
+	LayoutRaise $current(colorbar)
+    }
+
+    # graphs
+    if {$view(graph,horz)} {
+	GraphShow $current(frame) horz
+    }
+    if {$view(graph,vert)} {
+	GraphShow $current(frame) vert
+    }
+
+    FrameToFront
+}
+
+# show both active frames with the first stacked above the second.
+# safe to call whenever the stacking order may have been disturbed.
+proc RevealRaise {} {
+    global ds9
+
+    if {[llength $ds9(active)] != 2} {
+	return
+    }
+
+    set first [lindex $ds9(active) 0]
+    set second [lindex $ds9(active) 1]
+
+    catch {$second show}
+    catch {$first show}
+    catch {LayoutRaise $second}
+    catch {LayoutRaise $first}
+}
+
+# clip the first frame to [0,split), revealing the second frame to its right
+proc RevealUpdateClip {} {
+    global ds9
+    global reveal
+    global ireveal
+
+    if {$ds9(display) != {reveal} || [llength $ds9(active)] != 2} {
+	return
+    }
+
+    set first [lindex $ds9(active) 0]
+    set ww [$ds9(canvas) itemcget $first -width]
+
+    # the grammar rule takes an INT, so round here
+    set xx [expr {int($ww*$reveal(split))}]
+    if {$xx < 0} {
+	set xx 0
+    }
+    if {$xx > $ww} {
+	set xx $ww
+    }
+
+    set ireveal(split) $xx
+    catch {$first reveal $xx}
+}
+
+# drop any reveal clip. all frames, not just active ones, so a frame that
+# was clipped and then deactivated does not keep a stale clip.
+proc RevealClear {} {
+    global ds9
+    global ireveal
+
+    foreach ff $ds9(frames) {
+	if {[llength [info commands $ff]]} {
+	    catch {$ff reveal clear}
+	}
+    }
+
+    set ireveal(split) -1
 }
 
 proc LayoutFrame {} {

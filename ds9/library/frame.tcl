@@ -2091,6 +2091,7 @@ proc GotoFrame {which} {
 		}
 
 	    }
+	    reveal -
 	    tile {}
 	}
     }
@@ -2106,9 +2107,15 @@ proc GotoFrame {which} {
 	}
 
 	# frame
-	catch {$current(frame) show}
-	catch {LayoutRaise $current(frame)}
-#	$ds9(canvas) raise $current(frame)
+	if {$ds9(display) == {reveal}} {
+	    # both frames stay shown; raising current(frame) would break the
+	    # first-above-second stacking the clip depends on
+	    RevealRaise
+	} else {
+	    catch {$current(frame) show}
+	    catch {LayoutRaise $current(frame)}
+#	    $ds9(canvas) raise $current(frame)
+	}
 
 	# colorbar
 	if {$view(colorbar)} {
@@ -2138,6 +2145,7 @@ proc DisplayMode {} {
     global iblink
     global fade
     global ifade
+    global ireveal
 
     switch -- $current(display) {
 	single {set ds9(display) $current(display)}
@@ -2159,10 +2167,26 @@ proc DisplayMode {} {
 		set ds9(display) single
 	    }
 	}
+	reveal {
+	    if {[RevealAvail]} {
+		set ds9(display) $current(display)
+	    } elseif {[llength $ds9(active)] > 1} {
+		set ds9(display) tile
+	    } else {
+		set ds9(display) single
+	    }
+	}
+    }
+
+    # leaving reveal: drop the clip so no frame keeps a stale one.
+    # guarded, since RevealClear forces a redraw of every frame
+    if {$ds9(display) != {reveal} && $ireveal(split) != -1} {
+	RevealClear
     }
 
     switch -- $ds9(display) {
 	single -
+	reveal -
 	tile {
 	    # turn off blink if on
 	    if {$iblink(id)!={}} {
@@ -2227,6 +2251,23 @@ proc DisplayMode {} {
 	    }
 	}
     }
+}
+
+# reveal needs exactly two active frames, and cannot handle 3d frames
+proc RevealAvail {} {
+    global ds9
+
+    if {[llength $ds9(active)] != 2} {
+	return 0
+    }
+
+    foreach ff $ds9(active) {
+	if {[$ff get type] == {3d}} {
+	    return 0
+	}
+    }
+
+    return 1
 }
 
 proc BlinkTimer {} {
