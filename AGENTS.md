@@ -85,6 +85,12 @@ grammar rule in isolation:
 echo '$::current(frame) reveal 400' | ./bin/xpaset ds9 tcl
 ```
 
+Shut ds9 down with `./bin/xpaset -p ds9 exit` rather than killing the
+process — that is the supported way and it exits cleanly. (`pkill` also
+tends to miss the `./bin/ds9` wrapper and leave a stray process that
+holds the XPA name, so the next launch registers a second instance and
+`xpaget` answers from both.)
+
 Errors surface as `XPA$ERROR ...` on the `xpaset` call. To capture
 richer results, have the sent Tcl write to a file rather than trying to
 read a return value. Useful handles: `$::current(frame)` is the frame's

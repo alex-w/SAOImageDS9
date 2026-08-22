@@ -354,6 +354,8 @@ proc PrefsDialogFrameMenu {w} {
 	-variable pcurrent(display) -value blink
     $m add radiobutton -label [msgcat::mc {Fade Frames}] \
 	-variable pcurrent(display) -value fade
+    $m add radiobutton -label [msgcat::mc {Reveal Frames}] \
+	-variable pcurrent(display) -value reveal
     $m add separator
     $m add cascade -label [msgcat::mc {Frame Parameters}] \
 	-menu $m.params
@@ -365,6 +367,8 @@ proc PrefsDialogFrameMenu {w} {
 	-menu $m.params.blink
     $m.params add cascade -label [msgcat::mc {Fade Interval}] \
 	-menu $m.params.fade
+    $m.params add cascade -label [msgcat::mc {Reveal}] \
+	-menu $m.params.reveal
 
     ThemeMenu $m.params.tile
     $m.params.tile add radiobutton -label [msgcat::mc {Grid}] \
@@ -373,6 +377,13 @@ proc PrefsDialogFrameMenu {w} {
 	-variable ptile(mode) -value column
     $m.params.tile add radiobutton -label [msgcat::mc {Rows}] \
 	-variable ptile(mode) -value row
+
+    ThemeMenu $m.params.reveal
+    $m.params.reveal add checkbutton -label [msgcat::mc {Show Bar}] \
+	-variable pview(reveal,bar)
+    $m.params.reveal add cascade -label [msgcat::mc {Bar Color}] \
+	-menu $m.params.reveal.color
+    ColorMenu $m.params.reveal.color preveal bar,color {}
 
     ThemeMenu $m.params.blink
     $m.params.blink add radiobutton -label ".125 [msgcat::mc {Seconds}]" \

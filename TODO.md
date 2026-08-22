@@ -424,13 +424,66 @@ Docs are copied into the bundle by `make ds9` via
 Rendering of both the ref entry and the release note was checked in a
 browser, not just grepped.
 
-## Phase 7 — Persistence
+## Phase 7 — Persistence — DONE
 
-- [ ] Add reveal state to `prefs.tcl` backup/restore arrays (`pcurrent`,
-      `pview`) so Edit ▸ Preferences and session save/restore round-trip
-      it
-- [ ] Add to `backup.tcl` if display mode is serialized into `.bck`/
-      session files
+- [x] `prefs.tcl` — `reveal`/`preveal` block in `SavePrefs`, alongside
+      `blink`/`fade`/`tile`
+- [x] `backup.tcl` — `reveal`/`preveal` block in `BackupGUI`, same
+      neighbourhood
+- [x] Preferences dialog (`mframe.tcl`, `PrefsDialogFrameMenu`) —
+      a `Reveal Frames` radiobutton for `pcurrent(display)`, and a
+      `Frame Parameters` &rarr; `Reveal` cascade with a `Show Bar`
+      checkbutton (`pview(reveal,bar)`) and a `Bar Color` menu
+      (`preveal(bar,color)`)
+
+Nothing was needed for `pcurrent`/`pview` themselves — `pcurrent(display)`
+already exists from `CurrentDef`, and `view(reveal,bar)` has ridden in
+`pview` since Phase 5, both via the whole-array save.
+
+Two arrays, two jobs, and it matters which is which:
+- `preveal`/`pview`/`pcurrent` are **startup defaults**, edited by the
+  Preferences dialog and written to `~/.ds9/ds9.<ver>.prf`.
+- `reveal`/`view`/`current` are **live session state**, written into
+  `.bck` session files.
+This is the existing ds9 split, not something reveal invents: a slider
+drag changes `reveal(split)` but deliberately does not touch
+`preveal(split)`, exactly as toggling `View` &rarr; `Colorbar` does not
+change `pview(colorbar)`.
+
+`FixVar pcurrent(display) ds9(display,user)` (`prefs.tcl:1071`) is
+old-prefs migration only and needed no change.
+
+Session restore works because `BackupRestore` ends with
+`LayoutView` &rarr; `UpdateActiveFrames` &rarr; ... and
+`UpdateActiveFrames` finishes by calling `DisplayMode`. So a restored
+`current(display) reveal` is re-derived through the `RevealAvail` gate
+rather than being trusted blindly — restoring a reveal session into a
+state that no longer qualifies falls back cleanly.
+
+Note `pcurrent(display)` can now be `reveal`, which means ds9 can start
+up wanting reveal with 0 or 1 frames. That is safe: `DisplayMode` falls
+back to `single`, same as it already does for `blink`/`fade`.
+
+Verified live:
+- [x] **Session round-trip.** Saved a `.bck` with a deliberately
+      non-default state (split `0.31`, bar off). The file contains
+      `current(display) reveal`, `view(reveal,bar) 0`,
+      `reveal(split) 0.31`, with `preveal`/`pview` still holding the
+      defaults. Restoring into a fresh ds9 came back with reveal
+      active, split `0.31`, bar off, both frames present.
+- [x] **Restored state is internally coherent**, not just the reported
+      values: `ireveal(split)` = 282 on a 910px frame (= `int(910*.31)`),
+      the slider exists with its thumb at `0.31`, and the bar item is
+      absent because the pref is off.
+- [x] **Prefs round-trip.** Set `preveal(split) .42`,
+      `preveal(bar,color) magenta`, `pview(reveal,bar) 0`, saved, and
+      restarted: all three came back. (The real
+      `~/.ds9/ds9.8.8.prf` was copied aside first and restored
+      byte-identically afterwards — do the same if you re-run this.)
+- [x] Preferences dialog entries present and bound to the right
+      variables (`Reveal Frames` &rarr; `pcurrent(display)`,
+      `Show Bar` &rarr; `pview(reveal,bar)`, `Bar Color` &rarr;
+      `preveal(bar,color)`, 11 colours)
 
 ## Phase 8 — Testing
 
@@ -460,6 +513,12 @@ Also validated during Phase 3 (two frames, live):
       on exit, `ireveal(split)` returns to -1, no stale clip
 
 Still to do:
+
+- [ ] **SAMP** — the one integration path never exercised. Wired through
+      the same `comm.tcl` `CommSet`/`CommGet` switches as `blink`/`fade`
+      (which is what `samp.tcl:785,814` dispatch through), but it needs
+      a running hub. Check `reveal`, `reveal split` and `reveal bar`,
+      set and get.
 
 - [ ] Two frames, different zoom/pan/colormap — verify hard clip is
       visually correct at slider extremes and midpoint
