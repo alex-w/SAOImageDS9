@@ -2480,6 +2480,7 @@ proc FrameToFront {} {
 	single -
 	fade -
 	blink {}
+	reveal -
 	tile {$current(frame) highlite on}
     }
 
