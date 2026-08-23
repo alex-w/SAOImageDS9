@@ -180,7 +180,7 @@ proc MovieDialogUpdate {w} {
 
     set f $w.delay
     switch $ed(type) {
-	mpeg {$f.delay configure -state disabled}
+	mpeg {$f.delay configure -state normal}
 	gif {
 	    switch $ed(trans) {
 		blink {$f.delay configure -state normal}
@@ -703,7 +703,15 @@ proc MoviePhotoMPEG {} {
 	mpeg create "$movie(fn)" $ww $hh 25 1 1
 	set movie(first) 0
     }
-    mpeg add $ph
+    # mpeg is fixed at 25 frames/sec; approximate movie(delay)
+    # (hundredths of a second) by repeating this frame
+    set reps [expr {int(round($movie(delay) * 25.0 / 100.0))}]
+    if {$reps < 1} {
+	set reps 1
+    }
+    for {set ii 0} {$ii < $reps} {incr ii} {
+	mpeg add $ph
+    }
     image delete $ph
 
     return 0
