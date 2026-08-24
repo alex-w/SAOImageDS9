@@ -297,6 +297,7 @@ resample	{return RESAMPLE_;}
 rescan		{return RESCAN_;}
 reset		{return RESET_;}
 resolution	{return RESOLUTION_;}
+reveal		{return REVEAL_;}
 rgb		{return RGB_;}
 root		{return ROOT_;}
 rotate		{return ROTATE_;}

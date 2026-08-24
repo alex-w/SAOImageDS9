@@ -67,6 +67,36 @@ proc FadeDef {} {
     array set pfade [array get fade]
 }
 
+proc RevealDef {} {
+    global reveal
+    global ireveal
+    global preveal
+
+    # current split in canvas pixels; -1 means no clip is applied
+    set ireveal(split) -1
+
+    # canvas item id of the embedded slider; 0 means not on the canvas.
+    # the widget path is built lazily, since ds9(main) does not exist yet
+    set ireveal(slider,id) 0
+    set ireveal(slider,height) 18
+    set ireveal(slider,sync) 0
+    set ireveal(slider,fromslider) 0
+    set ireveal(slider,suspend) {}
+
+    # canvas item id of the demarcation bar; 0 means not on the canvas
+    set ireveal(bar,id) 0
+
+    # split position as a fraction of the frame width
+    set reveal(split) .5
+
+    # demarcation bar appearance. whether it is drawn at all is
+    # view(reveal,bar), alongside the other view toggles
+    set reveal(bar,color) cyan
+    set reveal(bar,width) 1
+
+    array set preveal [array get reveal]
+}
+
 proc TileDef {} {
     global tile
     global itile
@@ -99,6 +129,7 @@ proc ViewDef {} {
     set view(colorbar) 1
     set view(graph,horz) 0
     set view(graph,vert) 0
+    set view(reveal,bar) 1
 
     set view(info,filename) 1
     set view(info,object) 1
@@ -697,6 +728,10 @@ proc LayoutFrames {} {
     GraphHide graph horz
     GraphHide graph vert
 
+    # turn off reveal slider and bar
+    RevealSliderHide
+    RevealBarHide
+
     # all frames turn everything off
     foreach ff $ds9(frames) {
 	$ff hide
@@ -794,6 +829,7 @@ proc LayoutFramesOneOrMore {} {
 	fade -
 	blink -
 	single {LayoutFrameOne}
+	reveal {LayoutFrameReveal}
 	tile {
 	    if {[llength $ds9(active)] > 1} {
 		if {$view(multi)} {
@@ -867,6 +903,322 @@ proc LayoutFrameOne {} {
     }
 
     FrameToFront
+}
+
+proc LayoutFrameReveal {} {
+    global ds9
+    global view
+    global current
+    global colorbar
+    global canvas
+    global ireveal
+
+    set ww [winfo width $ds9(canvas)]
+    set hh [winfo height $ds9(canvas)]
+
+    # the slider gets its own strip along the bottom of the display area,
+    # and everything else -- both frames, the colorbar, the graphs -- is
+    # layed out in the space above it. reserving the strip here rather
+    # than placing the slider inside the frame area is what keeps it off
+    # the image and off the colorbar no matter which side the colorbar is
+    # on: only colorbar bottom leaves a gap at the foot of the frame.
+    set hh [expr {$hh-$ireveal(slider,height)-$canvas(gap)}]
+    if {$hh < 1} {
+	set hh 1
+    }
+
+    # reveal only works if the two frames overlap exactly, so both are
+    # given ONE geometry, computed from current(frame)'s colorbar -- that
+    # is the colorbar actually on display in this mode. colorbars are
+    # per-frame, so computing the rect inside the loop instead would hand
+    # each frame a different one: with the colorbar on top for one frame
+    # and bottom for the other they end up offset vertically, and past
+    # the edge of the clipped frame the other one bleeds through.
+    ColorbarGlobalSetFromFrame $current(frame)
+    LayoutColorbarAdjust
+
+    set fx 0
+    set fy 0
+    LayoutFrameOriginAdjust fx fy
+    set fw $ww
+    set fh $hh
+    LayoutFrameAdjust fw fh
+
+    foreach ff $ds9(active) {
+	# frame: the same rect for both
+	$ff configure -x $fx -y $fy -width $fw -height $fh -anchor nw
+
+	# colorbar and graphs keep each frame's own settings
+	ColorbarGlobalSetFromFrame $ff
+	LayoutColorbarAdjust
+
+	if {$view(colorbar) && $colorbar(show)} {
+	    LayoutColorbar ${ff}cb 0 0 $ww $hh
+	}
+
+	# graphs
+	if {$view(graph,horz)} {
+	    LayoutGraphHorz $ff 0 0 $ww $hh
+	    UpdateGraphAxis $ff horz
+	}
+	if {$view(graph,vert)} {
+	    LayoutGraphVert $ff 0 0 $ww $hh
+	    UpdateGraphAxis $ff vert
+    	}
+    }
+
+    # leave the global colorbar state on the frame that is displayed
+    ColorbarGlobalSetFromFrame $current(frame)
+    LayoutColorbarAdjust
+
+    # frames: unlike the other modes, both are shown at once
+    RevealRaise
+    RevealUpdateClip
+
+    # slider, in the strip reserved above. x and width come from the same
+    # shared frame rect, so the thumb stays lined up with the split in the
+    # image; the y is the foot of the whole display area.
+    RevealSliderShow $fx \
+	[expr {[winfo height $ds9(canvas)]-$ireveal(slider,height)}] $fw
+
+    # colorbar: follows current(frame) only, same as single mode
+    if {$view(colorbar) && $colorbar(show)} {
+	$current(colorbar) show
+	LayoutRaise $current(colorbar)
+    }
+
+    # graphs
+    if {$view(graph,horz)} {
+	GraphShow $current(frame) horz
+    }
+    if {$view(graph,vert)} {
+	GraphShow $current(frame) vert
+    }
+
+    FrameToFront
+}
+
+# show both active frames with the first stacked above the second.
+# safe to call whenever the stacking order may have been disturbed.
+proc RevealRaise {} {
+    global ds9
+
+    if {[llength $ds9(active)] != 2} {
+	return
+    }
+
+    set first [lindex $ds9(active) 0]
+    set second [lindex $ds9(active) 1]
+
+    catch {$second show}
+    catch {$first show}
+    catch {LayoutRaise $second}
+    catch {LayoutRaise $first}
+}
+
+# clip the first frame to [0,split), revealing the second frame to its right
+proc RevealUpdateClip {} {
+    global ds9
+    global reveal
+    global ireveal
+
+    if {$ds9(display) != {reveal} || [llength $ds9(active)] != 2} {
+	return
+    }
+
+    set first [lindex $ds9(active) 0]
+    set ww [$ds9(canvas) itemcget $first -width]
+
+    # the grammar rule takes an INT, so round here
+    set xx [expr {int($ww*$reveal(split))}]
+    if {$xx < 0} {
+	set xx 0
+    }
+    if {$xx > $ww} {
+	set xx $ww
+    }
+
+    set ireveal(split) $xx
+    catch {$first reveal $xx}
+
+    # keep the slider thumb in step with reveal(split), so setting the
+    # split from anywhere else (a command, a restored pref) moves the
+    # slider too. skipped when the slider itself is what drove us here.
+    if {!$ireveal(slider,fromslider)} {
+	RevealSliderSync
+    }
+
+    RevealBarUpdate
+}
+
+# drop any reveal clip. all frames, not just active ones, so a frame that
+# was clipped and then deactivated does not keep a stale clip.
+proc RevealClear {} {
+    global ds9
+    global ireveal
+
+    foreach ff $ds9(frames) {
+	if {[llength [info commands $ff]]} {
+	    catch {$ff reveal clear}
+	}
+    }
+
+    set ireveal(split) -1
+}
+
+# the slider is a bare ttk::scale embedded in the canvas, following the
+# same create-window/delete pattern the graphs use. it is a child of
+# ds9(main) rather than the canvas, matching how the graphs are parented.
+proc RevealSliderShow {xx yy ww} {
+    global ds9
+    global ireveal
+    global reveal
+
+    set sl $ds9(main).revealslider
+
+    if {![winfo exists $sl]} {
+	ttk::scale $sl \
+	    -orient horizontal \
+	    -from 0 -to 1 \
+	    -takefocus 0 \
+	    -command RevealSliderCmd
+    }
+
+    $sl configure -length $ww
+
+    RevealSliderSync
+
+    if {!$ireveal(slider,id)} {
+	set ireveal(slider,id) \
+	    [$ds9(canvas) create window $xx $yy -window $sl -anchor nw]
+    } else {
+	$ds9(canvas) coords $ireveal(slider,id) $xx $yy
+    }
+
+    # canvas raise has no affect on windows
+    raise $sl
+}
+
+# tk canvas postscript hands a window item off to the embedded widget's
+# own postscript command, and a ttk::scale has none -- so generating
+# postscript with the slider on the canvas fails outright. drop it for
+# the duration and put it back afterwards.
+proc RevealSliderSuspend {} {
+    global ds9
+    global ireveal
+
+    set ireveal(slider,suspend) {}
+
+    if {$ireveal(slider,id)} {
+	set cc [$ds9(canvas) coords $ireveal(slider,id)]
+	set sl $ds9(main).revealslider
+	set ireveal(slider,suspend) \
+	    [list [lindex $cc 0] [lindex $cc 1] [$sl cget -length]]
+	RevealSliderHide
+    }
+}
+
+proc RevealSliderResume {} {
+    global ireveal
+
+    if {$ireveal(slider,suspend) != {}} {
+	eval RevealSliderShow $ireveal(slider,suspend)
+	set ireveal(slider,suspend) {}
+    }
+}
+
+proc RevealSliderHide {} {
+    global ds9
+    global ireveal
+
+    if {$ireveal(slider,id)} {
+	$ds9(canvas) delete $ireveal(slider,id)
+	set ireveal(slider,id) 0
+    }
+}
+
+# move the thumb to match reveal(split) without re-triggering the clip
+proc RevealSliderSync {} {
+    global ds9
+    global ireveal
+    global reveal
+
+    set sl $ds9(main).revealslider
+    if {![winfo exists $sl]} {
+	return
+    }
+
+    set ireveal(slider,sync) 1
+    $sl set $reveal(split)
+    set ireveal(slider,sync) 0
+}
+
+proc RevealSliderCmd {vv} {
+    global reveal
+    global ireveal
+
+    # ignore the callback our own [$sl set] triggers
+    if {$ireveal(slider,sync)} {
+	return
+    }
+
+    set reveal(split) $vv
+
+    # the thumb is already where the user put it, no need to sync it back
+    set ireveal(slider,fromslider) 1
+    RevealUpdateClip
+    set ireveal(slider,fromslider) 0
+}
+
+# the demarcation bar marks the split line. a plain canvas line, and
+# deliberately not tagged 'graphic' -- that tag belongs to user
+# illustrate items and would pull the bar into that machinery.
+proc RevealBarUpdate {} {
+    global ds9
+    global ireveal
+    global reveal
+    global view
+
+    if {!$view(reveal,bar) ||
+	$ds9(display) != {reveal} ||
+	[llength $ds9(active)] != 2} {
+	RevealBarHide
+	return
+    }
+
+    set first [lindex $ds9(active) 0]
+    set fx [$ds9(canvas) itemcget $first -x]
+    set fy [$ds9(canvas) itemcget $first -y]
+    set fh [$ds9(canvas) itemcget $first -height]
+
+    set xx [expr {$fx+$ireveal(split)}]
+    set yy [expr {$fy+$fh}]
+
+    if {!$ireveal(bar,id)} {
+	set ireveal(bar,id) [$ds9(canvas) create line $xx $fy $xx $yy \
+				 -fill $reveal(bar,color) \
+				 -width $reveal(bar,width) \
+				 -tags {revealbar}]
+    } else {
+	$ds9(canvas) coords $ireveal(bar,id) $xx $fy $xx $yy
+	$ds9(canvas) itemconfigure $ireveal(bar,id) \
+	    -fill $reveal(bar,color) \
+	    -width $reveal(bar,width)
+    }
+
+    # above both frames. the slider is a window item and so floats above
+    # this regardless, which is what we want.
+    $ds9(canvas) raise $ireveal(bar,id)
+}
+
+proc RevealBarHide {} {
+    global ds9
+    global ireveal
+
+    if {$ireveal(bar,id)} {
+	$ds9(canvas) delete $ireveal(bar,id)
+	set ireveal(bar,id) 0
+    }
 }
 
 proc LayoutFrame {} {

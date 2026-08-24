@@ -1121,6 +1121,22 @@ int Base::postscriptProc(int prepass)
   if (prepass)
     return TCL_OK;
 
+  // reveal clip: restrict everything this item emits -- the image below,
+  // and the markers/contours/grid after it -- to the revealed columns, so
+  // the frame underneath shows through on the right exactly as it does on
+  // screen. rectclip intersects the current clip path, so the narrower of
+  // this and the clip set after ps() wins, and Tk brackets each item's
+  // postscript in gsave/grestore (tkCanvPs.c), so it cannot leak into any
+  // other item. left alone when revealWidth is -1, which is every display
+  // mode other than reveal.
+  if (revealWidth >= 0) {
+    ostringstream rstr;
+    rstr << psOrigin() << ' '
+	 << revealWidth << ' ' << options->height
+	 << " rectclip" << endl << ends;
+    Tcl_AppendResult(interp, rstr.str().c_str(), NULL);
+  }
+
   ps();
 
   // Markers & Contours & Grids clip path

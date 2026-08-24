@@ -785,6 +785,13 @@ proc BackupGUI {ch} {
     puts $ch "global pfade"
     puts $ch "array set pfade \{ [array get pfade] \}"
 
+    global reveal
+    puts $ch "global reveal"
+    puts $ch "array set reveal \{ [array get reveal] \}"
+    global preveal
+    puts $ch "global preveal"
+    puts $ch "array set preveal \{ [array get preveal] \}"
+
     global tile
     puts $ch "global tile"
     puts $ch "array set tile \{ [array get tile] \}"

@@ -591,6 +591,8 @@ proc PDF {fn} {
     global ps
     global pps
     global current
+    global ireveal
+    global reveal
 
     RealizeDS9
     UpdateColormapLevel
@@ -627,7 +629,26 @@ proc PDF {fn} {
 	$pdf setFillColor $bg
 	$pdf rectangle 0 0 $width $height -filled 1 -stroke 0
 
-	foreach ff $ds9(frames) {
+	# in reveal mode the two frames overlap exactly, so they have to be
+	# drawn in the same order they are stacked on screen -- the revealed
+	# frame first, then the clipped one over it -- and the clipped one
+	# has to be clipped here too, or it simply covers the other.
+	set framelist $ds9(frames)
+	set revealclip {}
+	if {$ds9(display) == {reveal} && [llength $ds9(active)] == 2 &&
+	    $ireveal(split) >= 0} {
+	    set rtop [lindex $ds9(active) 0]
+	    set rbot [lindex $ds9(active) 1]
+	    set framelist [list $rbot $rtop]
+	    foreach ff $ds9(frames) {
+		if {$ff != $rtop && $ff != $rbot} {
+		    lappend framelist $ff
+		}
+	    }
+	    set revealclip $rtop
+	}
+
+	foreach ff $framelist {
 	    if {![llength [info commands $ff]]} {
 		continue
 	    }
@@ -635,7 +656,22 @@ proc PDF {fn} {
 	    $ff postscript level $ps(level)
 	    $ff postscript colorspace $ps(color)
 	    $ff postscript resolution $ps(resolution)
-	    $ff pdf $pdf
+
+	    # clip the top frame to the revealed side. this wraps only the
+	    # frame itself, so the colorbar and graphs below are unaffected,
+	    # and being a pdf clip path it catches the vector layers --
+	    # markers, contours, grid -- as well as the image.
+	    if {$ff eq $revealclip} {
+		$pdf gsave
+		$pdf clip [$ds9(canvas) itemcget $ff -x] \
+		    [$ds9(canvas) itemcget $ff -y] \
+		    $ireveal(split) \
+		    [$ds9(canvas) itemcget $ff -height]
+		$ff pdf $pdf
+		$pdf grestore
+	    } else {
+		$ff pdf $pdf
+	    }
 
 	    set cb ${ff}cb
 	    if {[llength [info commands $cb]]} {
@@ -649,6 +685,20 @@ proc PDF {fn} {
 	}
 
 	PDFCanvasGraphics $pdf
+
+	# demarcation bar. drawn last so it lands above the frames and above
+	# any illustrate graphics, which is where the canvas raise puts it on
+	# screen. PDFCanvasGraphics does not pick it up, since the bar is
+	# deliberately not tagged as a graphic.
+	if {$revealclip != {} && $ireveal(bar,id)} {
+	    set cc [$ds9(canvas) coords $ireveal(bar,id)]
+	    $pdf gsave
+	    $pdf setStrokeColor $reveal(bar,color)
+	    $pdf setLineWidth $reveal(bar,width)
+	    $pdf line [lindex $cc 0] [lindex $cc 1] \
+		[lindex $cc 2] [lindex $cc 3]
+	    $pdf grestore
+	}
 
 	$pdf write -file $fn
     } rr]} {

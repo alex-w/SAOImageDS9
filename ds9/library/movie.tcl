@@ -368,6 +368,7 @@ proc MovieScript3dSync {} {
     switch $ds9(display) {
 	single -
 	blink {set frames [list $current(frame)]}
+	reveal -
 	tile {set frames $ds9(active)}
     }
 

@@ -37,6 +37,7 @@ proc CommSet {fn paramlist {safemode 0}} {
 	    backup {ProcessBackupCmd param i}
 	    bookmark {ProcessBookmarkCmd param i}
 	    blink {ProcessBlinkCmd param i}
+	    reveal {ProcessRevealCmd param i}
 	    bin {ProcessBinCmd param i}
 	    block {ProcessBlockCmd param i}
 	    cat -
@@ -269,6 +270,7 @@ proc CommGet {proc id paramlist fn} {
 		ProcessSendBgCmd $proc $id $param
 	    }
 	    blink {ProcessSendBlinkCmd $proc $id $param}
+	    reveal {ProcessSendRevealCmd $proc $id $param}
 	    bookmark {ProcessSendBookmarkCmd $proc $id $param}
 	    bin {ProcessSendBinCmd $proc $id $param}
 	    block {ProcessSendBlockCmd $proc $id $param}

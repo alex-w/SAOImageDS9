@@ -96,6 +96,7 @@
 <a href="#raise">raise</a><br>
 <a href="#region">region</a><br>
 <a href="#restore">restore</a><br>
+<a href="#reveal">reveal</a><br>
 <a href="#rgb">rgb</a><br>
 <a href="#rgbarray">rgbarray</a><br>
 <a href="#rgbcube">rgbcube</a><br>
@@ -2709,6 +2710,23 @@ restore &lt;filename&gt;<br>
 &nbsp;<br>
 Example:<br>
 $xpaset -p ds9 restore ds9.bck</tt><br>
+<p><b><a name="reveal" id="reveal"></a>reveal</b></p>
+<p>Reveal mode parameters. Available only when exactly two frames are active, neither of which is 3D. The two frames fully overlap: the first active frame is revealed on the left, the second on the right, split by a draggable slider along the bottom of the frame. Split is the position of that split as a fraction of the frame width, from 0 to 1. Bar controls the demarcation line drawn at the split.<br></p>
+<tt>Syntax:<br>
+reveal []<br>
+&nbsp;&nbsp;&nbsp; [yes|no]<br>
+&nbsp;&nbsp;&nbsp; [split &lt;value&gt;]<br>
+&nbsp;&nbsp;&nbsp; [bar yes|no]<br>
+&nbsp;<br>
+Example:<br>
+$xpaget ds9 reveal<br>
+$xpaget ds9 reveal split<br>
+$xpaget ds9 reveal bar<br>
+<br>
+$xpaset -p ds9 reveal<br>
+$xpaset -p ds9 reveal yes<br>
+$xpaset -p ds9 reveal split .25<br>
+$xpaset -p ds9 reveal bar no</tt><br>
 <p><b><a name="rgb" id="rgb"></a>rgb</b></p>
 <p>Create RGB frame and control RGB frame parameters.</p>
 <tt>Syntax:<br>

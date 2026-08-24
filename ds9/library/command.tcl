@@ -161,6 +161,7 @@ proc ProcessCommand {argv argc} {
 	    -bin {incr i; ProcessBinCmd argv i}
 	    -block {incr i; ProcessBlockCmd argv i}
 	    -blink {incr i; ProcessBlinkCmd argv i}
+	    -reveal {incr i; ProcessRevealCmd argv i}
 	    -blue {set current(rgb) blue; RGBChannel}
 
 	    -cat -

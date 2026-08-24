@@ -2091,6 +2091,7 @@ proc GotoFrame {which} {
 		}
 
 	    }
+	    reveal -
 	    tile {}
 	}
     }
@@ -2102,6 +2103,17 @@ proc GotoFrame {which} {
 
 	if {$ds9(display) == {tile} && !$view(multi)} {
 	    LayoutFrames
+	    return
+	}
+
+	# reveal: both frames share one rect, and that rect is computed
+	# from current(frame)'s colorbar, so switching frames has to re-run
+	# the layout. it also keeps both frames shown and preserves the
+	# first-above-second stacking the clip depends on, neither of which
+	# the generic path below would do.
+	if {$ds9(display) == {reveal}} {
+	    LayoutFrames
+	    UpdateBookmarksDialog
 	    return
 	}
 
@@ -2138,6 +2150,7 @@ proc DisplayMode {} {
     global iblink
     global fade
     global ifade
+    global ireveal
 
     switch -- $current(display) {
 	single {set ds9(display) $current(display)}
@@ -2159,10 +2172,26 @@ proc DisplayMode {} {
 		set ds9(display) single
 	    }
 	}
+	reveal {
+	    if {[RevealAvail]} {
+		set ds9(display) $current(display)
+	    } elseif {[llength $ds9(active)] > 1} {
+		set ds9(display) tile
+	    } else {
+		set ds9(display) single
+	    }
+	}
+    }
+
+    # leaving reveal: drop the clip so no frame keeps a stale one.
+    # guarded, since RevealClear forces a redraw of every frame
+    if {$ds9(display) != {reveal} && $ireveal(split) != -1} {
+	RevealClear
     }
 
     switch -- $ds9(display) {
 	single -
+	reveal -
 	tile {
 	    # turn off blink if on
 	    if {$iblink(id)!={}} {
@@ -2227,6 +2256,23 @@ proc DisplayMode {} {
 	    }
 	}
     }
+}
+
+# reveal needs exactly two active frames, and cannot handle 3d frames
+proc RevealAvail {} {
+    global ds9
+
+    if {[llength $ds9(active)] != 2} {
+	return 0
+    }
+
+    foreach ff $ds9(active) {
+	if {[$ff get type] == {3d}} {
+	    return 0
+	}
+    }
+
+    return 1
 }
 
 proc BlinkTimer {} {
@@ -2439,6 +2485,7 @@ proc FrameToFront {} {
 	single -
 	fade -
 	blink {}
+	reveal -
 	tile {$current(frame) highlite on}
     }
 
@@ -2690,6 +2737,55 @@ proc BlinkSendCmdInterval {} {
     global blink
 
     $parse(proc) $parse(id) "[expr $blink(interval)/1000.]\n"
+}
+
+proc ProcessRevealCmd {varname iname} {
+    upvar $varname var
+    upvar $iname i
+
+    reveal::YY_FLUSH_BUFFER
+    reveal::yy_scan_string [lrange $var $i end]
+    reveal::yyparse
+    incr i [expr $reveal::yycnt-1]
+}
+
+proc ProcessSendRevealCmd {proc id param {sock {}} {fn {}}} {
+    global parse
+    set parse(proc) $proc
+    set parse(id) $id
+
+    revealsend::YY_FLUSH_BUFFER
+    revealsend::yy_scan_string $param
+    revealsend::yyparse
+}
+
+proc RevealSendCmd {} {
+    global parse
+    global current
+
+    if {$current(display)=="reveal"} {
+	$parse(proc) $parse(id) "yes\n"
+    } else {
+	$parse(proc) $parse(id) "no\n"
+    }
+}
+
+proc RevealSendCmdSplit {} {
+    global parse
+    global reveal
+
+    $parse(proc) $parse(id) "$reveal(split)\n"
+}
+
+proc RevealSendCmdBar {} {
+    global parse
+    global view
+
+    if {$view(reveal,bar)} {
+	$parse(proc) $parse(id) "yes\n"
+    } else {
+	$parse(proc) $parse(id) "no\n"
+    }
 }
 
 proc ProcessFadeCmd {varname iname} {
