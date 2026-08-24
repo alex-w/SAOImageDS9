@@ -909,10 +909,22 @@ proc LayoutFrameReveal {} {
     global view
     global current
     global colorbar
+    global canvas
     global ireveal
 
     set ww [winfo width $ds9(canvas)]
     set hh [winfo height $ds9(canvas)]
+
+    # the slider gets its own strip along the bottom of the display area,
+    # and everything else -- both frames, the colorbar, the graphs -- is
+    # layed out in the space above it. reserving the strip here rather
+    # than placing the slider inside the frame area is what keeps it off
+    # the image and off the colorbar no matter which side the colorbar is
+    # on: only colorbar bottom leaves a gap at the foot of the frame.
+    set hh [expr {$hh-$ireveal(slider,height)-$canvas(gap)}]
+    if {$hh < 1} {
+	set hh 1
+    }
 
     # both frames are layed out identically, full size, fully overlapping
     foreach ff $ds9(active) {
@@ -948,15 +960,17 @@ proc LayoutFrameReveal {} {
     RevealRaise
     RevealUpdateClip
 
-    # slider, along the bottom edge of the frame area. same geometry the
-    # frames themselves got above
+    # slider, in the strip reserved above. x extent and width follow the
+    # frame so the thumb stays lined up with the split in the image, but
+    # the y is the foot of the whole display area.
     set sx 0
     set sy 0
     LayoutFrameOriginAdjust sx sy
     set sw $ww
     set sh $hh
     LayoutFrameAdjust sw sh
-    RevealSliderShow $sx [expr {$sy+$sh-$ireveal(slider,height)}] $sw
+    RevealSliderShow $sx \
+	[expr {[winfo height $ds9(canvas)]-$ireveal(slider,height)}] $sw
 
     # colorbar: follows current(frame) only, same as single mode
     if {$view(colorbar) && $colorbar(show)} {
