@@ -81,6 +81,7 @@ proc RevealDef {} {
     set ireveal(slider,height) 18
     set ireveal(slider,sync) 0
     set ireveal(slider,fromslider) 0
+    set ireveal(slider,suspend) {}
 
     # canvas item id of the demarcation bar; 0 means not on the canvas
     set ireveal(bar,id) 0
@@ -1096,6 +1097,34 @@ proc RevealSliderShow {xx yy ww} {
 
     # canvas raise has no affect on windows
     raise $sl
+}
+
+# tk canvas postscript hands a window item off to the embedded widget's
+# own postscript command, and a ttk::scale has none -- so generating
+# postscript with the slider on the canvas fails outright. drop it for
+# the duration and put it back afterwards.
+proc RevealSliderSuspend {} {
+    global ds9
+    global ireveal
+
+    set ireveal(slider,suspend) {}
+
+    if {$ireveal(slider,id)} {
+	set cc [$ds9(canvas) coords $ireveal(slider,id)]
+	set sl $ds9(main).revealslider
+	set ireveal(slider,suspend) \
+	    [list [lindex $cc 0] [lindex $cc 1] [$sl cget -length]]
+	RevealSliderHide
+    }
+}
+
+proc RevealSliderResume {} {
+    global ireveal
+
+    if {$ireveal(slider,suspend) != {}} {
+	eval RevealSliderShow $ireveal(slider,suspend)
+	set ireveal(slider,suspend) {}
+    }
 }
 
 proc RevealSliderHide {} {

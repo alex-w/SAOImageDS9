@@ -591,6 +591,7 @@ proc PDF {fn} {
     global ps
     global pps
     global current
+    global ireveal
 
     RealizeDS9
     UpdateColormapLevel
@@ -627,7 +628,26 @@ proc PDF {fn} {
 	$pdf setFillColor $bg
 	$pdf rectangle 0 0 $width $height -filled 1 -stroke 0
 
-	foreach ff $ds9(frames) {
+	# in reveal mode the two frames overlap exactly, so they have to be
+	# drawn in the same order they are stacked on screen -- the revealed
+	# frame first, then the clipped one over it -- and the clipped one
+	# has to be clipped here too, or it simply covers the other.
+	set framelist $ds9(frames)
+	set revealclip {}
+	if {$ds9(display) == {reveal} && [llength $ds9(active)] == 2 &&
+	    $ireveal(split) >= 0} {
+	    set rtop [lindex $ds9(active) 0]
+	    set rbot [lindex $ds9(active) 1]
+	    set framelist [list $rbot $rtop]
+	    foreach ff $ds9(frames) {
+		if {$ff != $rtop && $ff != $rbot} {
+		    lappend framelist $ff
+		}
+	    }
+	    set revealclip $rtop
+	}
+
+	foreach ff $framelist {
 	    if {![llength [info commands $ff]]} {
 		continue
 	    }
@@ -635,7 +655,22 @@ proc PDF {fn} {
 	    $ff postscript level $ps(level)
 	    $ff postscript colorspace $ps(color)
 	    $ff postscript resolution $ps(resolution)
-	    $ff pdf $pdf
+
+	    # clip the top frame to the revealed side. this wraps only the
+	    # frame itself, so the colorbar and graphs below are unaffected,
+	    # and being a pdf clip path it catches the vector layers --
+	    # markers, contours, grid -- as well as the image.
+	    if {$ff eq $revealclip} {
+		$pdf gsave
+		$pdf clip [$ds9(canvas) itemcget $ff -x] \
+		    [$ds9(canvas) itemcget $ff -y] \
+		    $ireveal(split) \
+		    [$ds9(canvas) itemcget $ff -height]
+		$ff pdf $pdf
+		$pdf grestore
+	    } else {
+		$ff pdf $pdf
+	    }
 
 	    set cb ${ff}cb
 	    if {[llength [info commands $cb]]} {
