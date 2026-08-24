@@ -926,21 +926,31 @@ proc LayoutFrameReveal {} {
 	set hh 1
     }
 
-    # both frames are layed out identically, full size, fully overlapping
-    foreach ff $ds9(active) {
-	ColorbarGlobalSetFromFrame $ff
-	LayoutColorbarAdjust
-	set fw $ww
-	set fh $hh
+    # reveal only works if the two frames overlap exactly, so both are
+    # given ONE geometry, computed from current(frame)'s colorbar -- that
+    # is the colorbar actually on display in this mode. colorbars are
+    # per-frame, so computing the rect inside the loop instead would hand
+    # each frame a different one: with the colorbar on top for one frame
+    # and bottom for the other they end up offset vertically, and past
+    # the edge of the clipped frame the other one bleeds through.
+    ColorbarGlobalSetFromFrame $current(frame)
+    LayoutColorbarAdjust
 
-	# frame
-	set fx 0
-	set fy 0
-	LayoutFrameOriginAdjust fx fy
-	LayoutFrameAdjust fw fh
+    set fx 0
+    set fy 0
+    LayoutFrameOriginAdjust fx fy
+    set fw $ww
+    set fh $hh
+    LayoutFrameAdjust fw fh
+
+    foreach ff $ds9(active) {
+	# frame: the same rect for both
 	$ff configure -x $fx -y $fy -width $fw -height $fh -anchor nw
 
-	# colorbar
+	# colorbar and graphs keep each frame's own settings
+	ColorbarGlobalSetFromFrame $ff
+	LayoutColorbarAdjust
+
 	if {$view(colorbar) && $colorbar(show)} {
 	    LayoutColorbar ${ff}cb 0 0 $ww $hh
 	}
@@ -956,21 +966,19 @@ proc LayoutFrameReveal {} {
     	}
     }
 
+    # leave the global colorbar state on the frame that is displayed
+    ColorbarGlobalSetFromFrame $current(frame)
+    LayoutColorbarAdjust
+
     # frames: unlike the other modes, both are shown at once
     RevealRaise
     RevealUpdateClip
 
-    # slider, in the strip reserved above. x extent and width follow the
-    # frame so the thumb stays lined up with the split in the image, but
-    # the y is the foot of the whole display area.
-    set sx 0
-    set sy 0
-    LayoutFrameOriginAdjust sx sy
-    set sw $ww
-    set sh $hh
-    LayoutFrameAdjust sw sh
-    RevealSliderShow $sx \
-	[expr {[winfo height $ds9(canvas)]-$ireveal(slider,height)}] $sw
+    # slider, in the strip reserved above. x and width come from the same
+    # shared frame rect, so the thumb stays lined up with the split in the
+    # image; the y is the foot of the whole display area.
+    RevealSliderShow $fx \
+	[expr {[winfo height $ds9(canvas)]-$ireveal(slider,height)}] $fw
 
     # colorbar: follows current(frame) only, same as single mode
     if {$view(colorbar) && $colorbar(show)} {

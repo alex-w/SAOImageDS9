@@ -2106,16 +2106,21 @@ proc GotoFrame {which} {
 	    return
 	}
 
-	# frame
+	# reveal: both frames share one rect, and that rect is computed
+	# from current(frame)'s colorbar, so switching frames has to re-run
+	# the layout. it also keeps both frames shown and preserves the
+	# first-above-second stacking the clip depends on, neither of which
+	# the generic path below would do.
 	if {$ds9(display) == {reveal}} {
-	    # both frames stay shown; raising current(frame) would break the
-	    # first-above-second stacking the clip depends on
-	    RevealRaise
-	} else {
-	    catch {$current(frame) show}
-	    catch {LayoutRaise $current(frame)}
-#	    $ds9(canvas) raise $current(frame)
+	    LayoutFrames
+	    UpdateBookmarksDialog
+	    return
 	}
+
+	# frame
+	catch {$current(frame) show}
+	catch {LayoutRaise $current(frame)}
+#	$ds9(canvas) raise $current(frame)
 
 	# colorbar
 	if {$view(colorbar)} {
