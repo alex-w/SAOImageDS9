@@ -592,6 +592,7 @@ proc PDF {fn} {
     global pps
     global current
     global ireveal
+    global reveal
 
     RealizeDS9
     UpdateColormapLevel
@@ -684,6 +685,20 @@ proc PDF {fn} {
 	}
 
 	PDFCanvasGraphics $pdf
+
+	# demarcation bar. drawn last so it lands above the frames and above
+	# any illustrate graphics, which is where the canvas raise puts it on
+	# screen. PDFCanvasGraphics does not pick it up, since the bar is
+	# deliberately not tagged as a graphic.
+	if {$revealclip != {} && $ireveal(bar,id)} {
+	    set cc [$ds9(canvas) coords $ireveal(bar,id)]
+	    $pdf gsave
+	    $pdf setStrokeColor $reveal(bar,color)
+	    $pdf setLineWidth $reveal(bar,width)
+	    $pdf line [lindex $cc 0] [lindex $cc 1] \
+		[lindex $cc 2] [lindex $cc 3]
+	    $pdf grestore
+	}
 
 	$pdf write -file $fn
     } rr]} {
