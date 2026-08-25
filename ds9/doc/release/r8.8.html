@@ -34,8 +34,9 @@ inside a 2D region as an automatically updated 3D data cube.</li>
 Intensity Point) rendering displays the first finite, non-zero voxel
 along each ray and can add basic shading and lighting.</li>
 <li><strong>Virtual Observatory image search:</strong>
-<code>Analysis</code> → <code>Search SIA Registry</code> finds Simple
-Image Access (SIA) services in a VO registry.</li>
+<code>Analysis</code> → <code>Archives</code> →
+<code>Search SIA Registry</code> finds Simple Image Access (SIA)
+services in a VO registry.</li>
 <li><strong>CIAO/FITS composite-region logic:</strong> DS9 now preserves
 explicit intersection and union logic in composite regions and can show
 hatching to visualize the selected area. <strong>This changes previous
@@ -58,9 +59,8 @@ arbitrary number of observations or filters, rather than being limited
 to RGB. Layers can be added, removed, reordered, shown, and configured
 independently. Layer order matters because each layer is blended with
 the layers below it.</p>
-<p>Available blend modes include:</p>
-<p><code>multiply</code>, <code>overlay</code>,
-<code>color-dodge</code>, <code>color-burn</code>,
+<p>Available blend modes include: <code>multiply</code>,
+<code>overlay</code>, <code>color-dodge</code>, <code>color-burn</code>,
 <code>hard-light</code>, <code>soft-light</code>,
 <code>difference</code>, <code>exclusion</code>, <code>hue</code>,
 <code>saturation</code>, <code>color</code>, and
@@ -104,6 +104,22 @@ marker-free <code>Pan To</code>.</li>
 WCS coordinates.</li>
 <li>Initial and image-wide measurements use bounded multithreading.</li>
 </ul>
+<h4 id="reveal-frames">Reveal frames</h4>
+<p><code>Frame</code> → <code>Reveal Frames</code> is a new display mode
+for comparing two images of the same field. Both frames are shown at
+full size, exactly overlapping, and a slider along the bottom of the
+frame wipes between them: the first active frame is revealed to the left
+of the split, the second to the right. Regions, contours and other
+overlays are clipped along with the frame they belong to. The colorbar
+belongs to the active frame.</p>
+<p>The mode is available only when exactly two frames are active and
+neither is a 3D frame; otherwise DS9 falls back to <code>tile</code> or
+<code>single</code>. A cyan demarcation line marks the split and can be
+turned off with <code>Frame</code> → <code>Reveal Bar</code>.</p>
+<p>Scriptable as <code>reveal</code> over XPA and SAMP, and as
+<code>-reveal</code> on the command line, including
+<code>reveal split</code> to set the split position and
+<code>reveal bar</code> to toggle the demarcation line.</p>
 <h4 id="pixel-masks">Pixel masks</h4>
 <p><code>save pixmask</code> writes a FITS image whose pixel values are
 region ID numbers. Pixels outside all regions, or excluded pixels, are
@@ -138,21 +154,6 @@ selected by intersection or union logic.</li>
 </ul>
 <h4 id="navigation-regions-and-display">Navigation, regions, and
 display</h4>
-<h4 id="reveal-frames">Reveal frames</h4>
-<p><code>Frame</code> &rarr; <code>Reveal Frames</code> is a new display
-mode for comparing two images of the same field. Both frames are shown
-at full size, exactly overlapping, and a slider along the bottom of the
-frame wipes between them: the first active frame is revealed to the left
-of the split, the second to the right. Regions, contours and other
-overlays are clipped along with the frame they belong to.</p>
-<p>The mode is available only when exactly two frames are active and
-neither is a 3D frame; otherwise DS9 falls back to <code>tile</code> or
-<code>single</code>. A cyan demarcation line marks the split and can be
-turned off with <code>Frame</code> &rarr; <code>Reveal Bar</code>.</p>
-<p>Scriptable as <code>reveal</code> over XPA and SAMP, and as
-<code>-reveal</code> on the command line, including
-<code>reveal split</code> to set the split position and
-<code>reveal bar</code> to toggle the line.</p>
 <ul>
 <li>In PAN mode, <code>Shift+Arrow</code> pans by one screen at a
 time.</li>
@@ -176,10 +177,10 @@ plotted data.</li>
 <h4 id="archives-catalogs-and-table-data">Archives, catalogs, and table
 data</h4>
 <ul>
-<li><code>Analysis</code> → <code>Search SIA Registry</code> queries a
-Virtual Observatory registry for SIA image services. The registry URL
-can be set in Preferences; command-line, XPA, and SAMP access is also
-available.</li>
+<li><code>Analysis</code> → <code>Archives</code>
+→<code>Search SIA Registry</code> queries a Virtual Observatory registry
+for SIA image services. The registry URL can be set in Preferences;
+command-line, XPA, and SAMP access is also available.</li>
 <li>CIAO-style TSV vector columns such as <code>sky(x,y)</code> are read
 as <code>sky_x</code> and <code>sky_y</code>. Array columns such as
 <code>R[2]</code> are expanded to <code>R_1</code> and <code>R_2</code>.
