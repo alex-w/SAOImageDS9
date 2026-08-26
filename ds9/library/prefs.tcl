@@ -14,7 +14,7 @@ proc PrefsDef {} {
 
     set prefs(ext) {.prf}
     set prefs(version) [lindex $ds9(version) 0]
-    set prefs(dir) [file join [GetEnvHome] ".$ds9(app)"]
+    set prefs(dir) [file join [GetAppDataHome] ".$ds9(app)"]
     set prefs(fn) [file join $prefs(dir) "$ds9(app).$prefs(version)$prefs(ext)"]
 }
 

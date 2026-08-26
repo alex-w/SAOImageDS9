@@ -27,9 +27,9 @@ proc ProcessCommandLineFirst {} {
 		wm title $ds9(top) "$tt"
 		wm iconname $ds9(top) $"tt"
 
-		set prefs(dir) [file join [GetEnvHome] ".$ds9(app)"]
+		set prefs(dir) [file join [GetAppDataHome] ".$ds9(app)"]
 		set prefs(fn) [file join $prefs(dir) "$ds9(app).$prefs(version)$prefs(ext)"]
-		set autosave(fn) [file join [GetEnvHome] "$ds9(app).auto"]
+		set autosave(fn) [file join [GetAppDataHome] "$ds9(app).auto"]
 	    }
 	}
 	incr i

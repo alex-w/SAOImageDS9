@@ -30,6 +30,29 @@ proc GetEnvHome {} {
     return {}
 }
 
+# location for ds9-managed persistent state (prefs, autosave, ...).
+# on windows, this is the per-user roaming app data dir, since HOME
+# (or its HOMEDRIVE/HOMEPATH fallback) is not the recommended place for
+# an app to keep its own files. unix/aqua are unaffected.
+proc GetAppDataHome {} {
+    global env
+    global tcl_platform
+
+    switch $tcl_platform(platform) {
+	windows {
+	    if {[info exists env(APPDATA)]} {
+		set hh [file normalize [file nativename $env(APPDATA)]]
+		if {[file isdirectory $hh]} {
+		    return $hh
+		}
+	    }
+	}
+    }
+
+    # unix/aqua, or as a windows fallback if APPDATA is unset/unusable
+    return [GetEnvHome]
+}
+
 proc ParseURL {url varname} {
     upvar $varname r
 
