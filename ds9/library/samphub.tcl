@@ -80,7 +80,7 @@ proc SAMPHubStart {verbose} {
     }
 
     if {$fn == {}} {
-	set fn [file join [GetEnvHome] {.samp}]
+	set fn [file join [GetSampHome] {.samp}]
     }
     set samphub(fn) $fn
 

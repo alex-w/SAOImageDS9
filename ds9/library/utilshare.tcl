@@ -53,6 +53,38 @@ proc GetAppDataHome {} {
     return [GetEnvHome]
 }
 
+# home directory as defined by the SAMP standard profile (IVOA
+# REC-SAMP-1.3, sec 4.3.1): HOME on unix-like systems, but USERPROFILE
+# -- not HOMEDRIVE/HOMEPATH -- on windows. this must match what other
+# SAMP clients (e.g. topcat/JSAMP) use to find the .samp lockfile, so
+# it deliberately does NOT consult a windows HOME env var: one may be
+# set (by cygwin, msys, git-bash, conda, ...) to something other than
+# USERPROFILE, which would otherwise point ds9 and other SAMP clients
+# at different lockfile locations and break hub discovery between them.
+proc GetSampHome {} {
+    global env
+    global tcl_platform
+
+    switch $tcl_platform(platform) {
+	unix {
+	    if {[info exists env(HOME)]} {
+		return $env(HOME)
+	    }
+	}
+	windows {
+	    if {[info exists env(USERPROFILE)]} {
+		set hh [file normalize [file nativename $env(USERPROFILE)]]
+		if {[file isdirectory $hh]} {
+		    return $hh
+		}
+	    }
+	}
+    }
+
+    # fallback, in case HOME/USERPROFILE was missing or unusable
+    return [GetEnvHome]
+}
+
 proc ParseURL {url varname} {
     upvar $varname r
 
