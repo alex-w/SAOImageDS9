@@ -2177,8 +2177,10 @@ proc DisplayMode {} {
 		set ds9(display) $current(display)
 	    } elseif {[llength $ds9(active)] > 1} {
 		set ds9(display) tile
+		set current(display) tile
 	    } else {
 		set ds9(display) single
+		set current(display) single
 	    }
 	}
     }
