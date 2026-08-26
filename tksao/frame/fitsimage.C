@@ -3413,7 +3413,14 @@ static void fits2TAB(AstFitsChan* chan, const char* extname,
   }
 
   // skip the current HDU
+  // NB: FitsMMapIncr is a no-op stub on __WIN32 (no mmap()), so follow
+  // with the portable AllocGZ variant there instead, matching whatever
+  // 'which' MMAP/MMAPINCR would have picked on unix/macos
+#ifndef __WIN32
   ext = new FitsMosaicNextMMapIncr(ext);
+#else
+  ext = new FitsMosaicNextAllocGZ(ext, FitsFile::NOFLUSH);
+#endif
 
   while (1) {
     // EOF?
