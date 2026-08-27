@@ -3402,24 +3402,70 @@ Vector3d FitsImage::vDegToRad(const Vector3d& vv, Coord::CoordSystem sys)
   return out;
 }
 
-// return a "next HDU" reader that matches whatever backend actually
-// loaded 'prev', instead of assuming one fixed backend. fitsy's
-// FitsMosaicNext* classes each blindly downcast their 'prev' argument
-// to a pointer of their own backend family (eg FitsMosaicNextMapIncr
-// treats it as a FitsMapIncr*, dereferencing members that only exist
-// in that layout); mismatching that is undefined behavior, not just a
-// wrong answer -- confirmed by a standalone reproduction that SIGBUSes
-// when an AllocGZ-loaded FITS file (ds9's default disk-load backend,
-// see ds9/library/load.tcl) is walked with an MMAPINCR-only next-HDU
-// class. This mirrors the switch on the parent's actual load type
-// that Context::loadMosaicWFPC2 (context.C) already does.
+// Reopen the target extension fresh, straight from the original file
+// by name+bracket ("file.fits[WCS-TAB]") -- the same technique already
+// used by Base::fitsyHasExtCmd/markerLoadFitsCmd (basecommand.C/
+// frmarker.C) -- rather than continuing to read forward from the
+// parent's existing FitsFile. That distinction matters: by the time
+// this callback runs, Context::load() (context.C) has *already*
+// called img->close() on the freshly-loaded image, once slice/mosaic
+// setup finishes and before WCS setup (FitsImage::block -> resetWCS ->
+// initWCS -> fits2ast) runs. For any FitsStream<T>-based backend --
+// Alloc/AllocGZ/Channel/Socket/SocketGZ -- done() really does close()
+// the underlying handle, so nothing chained off it can be read
+// afterward. mmap-based backends (MMAP/MMAPINCR/SHARE/VAR) don't hit
+// this: their done() is a no-op, so the mapped memory stays valid.
+// That's why this only bites Alloc/AllocGZ-loaded files: ordinary
+// unix/macos disk loads default to mmapincr, but ordinary Windows
+// loads are rewritten to allocgz (see the win32 case in
+// ds9/library/load.tcl's ProcessLoad).
+//
+// Detecting the parent's backend family via RTTI (FitsFile is already
+// polymorphic) and picking the matching class this way -- rather than
+// assuming one fixed backend -- also avoids a second, independent bug:
+// fitsy's FitsMosaicNext* classes each blindly downcast their 'prev'
+// argument to a pointer of their own backend family (eg
+// FitsMosaicNextMapIncr treats it as a FitsMapIncr*, dereferencing
+// members that only exist in that layout), so mismatching that is
+// undefined behavior, not just a wrong answer.
+static FitsFile* fits2OpenExt(FitsFile* orig, const char* extname,
+			      int extver, int extlevel)
+{
+  const char* pname = orig->pName();
+  if (!pname || !pname[0])
+    return NULL;
+
+  int len = strlen(pname) + strlen(extname) + 3;
+  char* buf = new char[len];
+  snprintf(buf, len, "%s[%s]", pname, extname);
+
+  FitsFile* ext = NULL;
+  if (dynamic_cast<FitsMapIncr*>(orig))
+    ext = new FitsFitsMMapIncr(buf, FitsFile::RELAXTABLE);
+  else if (dynamic_cast<FitsMap*>(orig))
+    ext = new FitsFitsMMap(buf, FitsFile::RELAXTABLE);
+  else if (dynamic_cast<FitsStream<gzFile>*>(orig))
+    ext = new FitsFitsAllocGZ(buf, FitsFile::RELAXTABLE, FitsFile::NOFLUSH);
+  else if (dynamic_cast<FitsStream<FILE*>*>(orig))
+    ext = new FitsFitsAlloc(buf, FitsFile::RELAXTABLE, FitsFile::NOFLUSH);
+
+  delete [] buf;
+
+  if (ext && ext->isValid() && ext->isBinTable() &&
+      ext->extver() == extver && ext->extlevel() == extlevel)
+    return ext;
+
+  if (ext)
+    delete ext;
+  return NULL;
+}
+
+// fallback next-HDU walker for backends fits2OpenExt() can't reopen
+// (Channel/Socket/SocketGZ have no reusable filename) -- best effort,
+// continuing from wherever the parent's own handle currently is; see
+// fits2OpenExt()'s comment for why that handle may already be closed
 static FitsFile* fits2NextHDU(FitsFile* prev)
 {
-#ifdef __WIN32
-  // FitsMap/FitsMapIncr (mmap-based) are no-op stubs here (no mmap());
-  // AllocGZ is the portable match for any backend
-  return new FitsMosaicNextAllocGZ(prev, FitsFile::NOFLUSH);
-#else
   if (dynamic_cast<FitsMapIncr*>(prev))
     return new FitsMosaicNextMMapIncr(prev);
   if (dynamic_cast<FitsMap*>(prev))
@@ -3435,45 +3481,48 @@ static FitsFile* fits2NextHDU(FitsFile* prev)
   if (dynamic_cast<FitsStream<gzStream>*>(prev))
     return new FitsMosaicNextSocketGZ(prev, FitsFile::FLUSH);
   return NULL;
-#endif
 }
 
 static void fits2TAB(AstFitsChan* chan, const char* extname,
 		     int extver, int extlevel, int* status)
 {
-  FitsFile* ext = ((FitsImage*)astChannelData)->fitsFile();
+  FitsFile* orig = ((FitsImage*)astChannelData)->fitsFile();
   // just in case
-  if (!ext) {
+  if (!orig) {
     *status = 0;
     return;
   }
 
-  // skip the current HDU
-  ext = fits2NextHDU(ext);
+  FitsFile* ext = fits2OpenExt(orig, extname, extver, extlevel);
 
-  while (1) {
-    // EOF?
-    if (!ext || !ext->isValid()) {
-      if (ext)
-	delete ext;
-      *status = 0;
-      return;
+  if (!ext) {
+    // fallback: walk forward from the parent's current position
+    ext = fits2NextHDU(orig);
+
+    while (1) {
+      // EOF?
+      if (!ext || !ext->isValid()) {
+	if (ext)
+	  delete ext;
+	*status = 0;
+	return;
+      }
+
+      // is it a bin table?
+      if (ext->isBinTable()) {
+	// check its extname
+	const char* name = ext->extname();
+	int ver = ext->extver();
+	int level = ext->extlevel();
+
+	if (name && !strcmp(extname,name) && extver==ver && extlevel==level)
+	  break;
+      }
+
+      FitsFile* ptr = ext;
+      ext = fits2NextHDU(ptr);
+      delete ptr;
     }
-
-    // is it a bin table?
-    if (ext->isBinTable()) {
-      // check its extname
-      const char* name = ext->extname();
-      int ver = ext->extver();
-      int level = ext->extlevel();
-
-      if (name && !strcmp(extname,name) && extver==ver && extlevel==level)
-	break;
-    }
-
-    FitsFile* ptr = ext;
-    ext = fits2NextHDU(ptr);
-    delete ptr;
   }
 
   // ok, found it
@@ -3618,7 +3667,7 @@ AstFrameSet* FitsImage::fits2ast(FitsHead* hd)
   AstFrameSet* frameSet = (AstFrameSet*)astRead(chan);
 
   // do we have anything?
-  if (!astOK || frameSet == AST__NULL || 
+  if (!astOK || frameSet == AST__NULL ||
       strncmp(astGetC(frameSet,"Class"), "FrameSet", 8))
     return NULL;
 
