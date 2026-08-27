@@ -3402,6 +3402,42 @@ Vector3d FitsImage::vDegToRad(const Vector3d& vv, Coord::CoordSystem sys)
   return out;
 }
 
+// return a "next HDU" reader that matches whatever backend actually
+// loaded 'prev', instead of assuming one fixed backend. fitsy's
+// FitsMosaicNext* classes each blindly downcast their 'prev' argument
+// to a pointer of their own backend family (eg FitsMosaicNextMapIncr
+// treats it as a FitsMapIncr*, dereferencing members that only exist
+// in that layout); mismatching that is undefined behavior, not just a
+// wrong answer -- confirmed by a standalone reproduction that SIGBUSes
+// when an AllocGZ-loaded FITS file (ds9's default disk-load backend,
+// see ds9/library/load.tcl) is walked with an MMAPINCR-only next-HDU
+// class. This mirrors the switch on the parent's actual load type
+// that Context::loadMosaicWFPC2 (context.C) already does.
+static FitsFile* fits2NextHDU(FitsFile* prev)
+{
+#ifdef __WIN32
+  // FitsMap/FitsMapIncr (mmap-based) are no-op stubs here (no mmap());
+  // AllocGZ is the portable match for any backend
+  return new FitsMosaicNextAllocGZ(prev, FitsFile::NOFLUSH);
+#else
+  if (dynamic_cast<FitsMapIncr*>(prev))
+    return new FitsMosaicNextMMapIncr(prev);
+  if (dynamic_cast<FitsMap*>(prev))
+    return new FitsMosaicNextMap(prev);
+  if (dynamic_cast<FitsStream<gzFile>*>(prev))
+    return new FitsMosaicNextAllocGZ(prev, FitsFile::NOFLUSH);
+  if (dynamic_cast<FitsStream<FILE*>*>(prev))
+    return new FitsMosaicNextAlloc(prev, FitsFile::NOFLUSH);
+  if (dynamic_cast<FitsStream<Tcl_Channel>*>(prev))
+    return new FitsMosaicNextChannel(prev, FitsFile::NOFLUSH);
+  if (dynamic_cast<FitsStream<int>*>(prev))
+    return new FitsMosaicNextSocket(prev, FitsFile::FLUSH);
+  if (dynamic_cast<FitsStream<gzStream>*>(prev))
+    return new FitsMosaicNextSocketGZ(prev, FitsFile::FLUSH);
+  return NULL;
+#endif
+}
+
 static void fits2TAB(AstFitsChan* chan, const char* extname,
 		     int extver, int extlevel, int* status)
 {
@@ -3413,14 +3449,7 @@ static void fits2TAB(AstFitsChan* chan, const char* extname,
   }
 
   // skip the current HDU
-  // NB: FitsMMapIncr is a no-op stub on __WIN32 (no mmap()), so follow
-  // with the portable AllocGZ variant there instead, matching whatever
-  // 'which' MMAP/MMAPINCR would have picked on unix/macos
-#ifndef __WIN32
-  ext = new FitsMosaicNextMMapIncr(ext);
-#else
-  ext = new FitsMosaicNextAllocGZ(ext, FitsFile::NOFLUSH);
-#endif
+  ext = fits2NextHDU(ext);
 
   while (1) {
     // EOF?
@@ -3443,9 +3472,9 @@ static void fits2TAB(AstFitsChan* chan, const char* extname,
     }
 
     FitsFile* ptr = ext;
-    ext = new FitsMosaicNextMMapIncr(ptr);
+    ext = fits2NextHDU(ptr);
     delete ptr;
-  }  
+  }
 
   // ok, found it
   astClearStatus; // just to make sure
