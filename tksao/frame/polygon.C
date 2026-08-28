@@ -37,7 +37,10 @@ Polygon::Polygon(Base* p, const List<Vertex>& v,
   strcpy(type_, "polygon");
 
   // check to see if the first and last node are the same
-  if (vertex.head()->vector[0] == vertex.tail()->vector[0] &&
+  // (but not when there is only one vertex, where head==tail trivially
+  // and popping it would leave the polygon with no vertices at all)
+  if (vertex.count() > 1 &&
+      vertex.head()->vector[0] == vertex.tail()->vector[0] &&
       vertex.head()->vector[1] == vertex.tail()->vector[1])
     delete vertex.pop();
 }
