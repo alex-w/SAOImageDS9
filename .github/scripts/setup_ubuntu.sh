@@ -3,6 +3,8 @@
 # Install any dependencies for building SAOImageDS9 on Ubuntu.
 #
 
+sudo apt-get update
+
 sudo apt-get install \
   automake \
   autoconf \
