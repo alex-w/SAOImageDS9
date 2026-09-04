@@ -4,9 +4,11 @@
 
 #include "colorbart.h"
 
-ColorbarA::ColorbarA(Tcl_Interp* i,Tk_Canvas c,Tk_Item* item) 
+ColorbarA::ColorbarA(Tcl_Interp* i,Tk_Canvas c,Tk_Item* item)
   : ColorbarBase(i,c,item)
 {
+  channel = 0;
+
   for (int i=0; i<3; i++) {
     bias[i] = .5;
     contrast[i] = 1.0;
