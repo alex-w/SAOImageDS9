@@ -843,19 +843,25 @@ proc HVParseMulti {varname} {
 	HVParseMeta $varname
 
 	set body [expr {$hend+$hlen}]
-	set nextCRLF [string first "\r\n$delim" $data $body]
-	set nextLF [string first "\n$delim" $data $body]
-	if {$nextCRLF >= 0 && ($nextLF < 0 || $nextCRLF <= $nextLF)} {
-	    set next $nextCRLF
-	    set pos [expr {$nextCRLF+2}]
-	} elseif {$nextLF >= 0} {
-	    set next $nextLF
-	    set pos [expr {$nextLF+1}]
-	} else {
+
+	# find the next boundary directly, rather than requiring a leading
+	# CRLF/LF right at $body: a part with an empty body (eg a bare
+	# 'paramlist="web close"' part) has the boundary line immediately
+	# adjacent to $body, with no separating newline of its own, so a
+	# search anchored on "\n$delim"/"\r\n$delim" starting at $body would
+	# miss it and swallow the whole next part as payload instead.
+	set next [string first $delim $data $body]
+	if {$next < 0} {
 	    break
 	}
+	set pos $next
 
 	set payload [string range $data $body [expr {$next-1}]]
+	if {[string range $payload end-1 end] == "\r\n"} {
+	    set payload [string range $payload 0 end-2]
+	} elseif {[string range $payload end end] == "\n"} {
+	    set payload [string range $payload 0 end-1]
+	}
 
 	set var(fn) [tmpnam {.http}]
 	set var(delete) 1
