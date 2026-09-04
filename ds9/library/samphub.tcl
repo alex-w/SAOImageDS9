@@ -33,8 +33,15 @@ proc SAMPHubStart {verbose} {
     set samp(debug) $debug(tcl,samp)
     if {[SAMPParseHub]} {
 	# ok, found one, is it alive?
+	# samp(url) is authority-only; re-attach the path SAMPParseHub
+	# split off into samp(method), or SAMPHubSend has nothing to derive
+	# the endpoint path from
+	set huburl $samp(url)
+	if {$samp(method) != {}} {
+	    append huburl "/$samp(method)"
+	}
 	set rr {}
-	if {[SAMPHubSend {samp.hub.ping} $samp(url) {} rr]} {
+	if {[SAMPHubSend {samp.hub.ping} $huburl {} rr]} {
 	    # yes, its alive
 	    if {$verbose} {
 		Error "SAMPHub: [msgcat::mc {found existing hub}]"
