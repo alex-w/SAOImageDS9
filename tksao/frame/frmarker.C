@@ -5170,7 +5170,14 @@ void Base::markerLoadFitsCmd(const char* fn, const char* color)
   // do we have a WCS?
   FitsImage* mkfits = NULL;
   {
+    // NB: FitsMMap is a no-op stub on __WIN32 (no mmap()), so load via
+    // the portable AllocGZ variant there instead
+#ifndef __WIN32
     mkfits = new FitsImageFitsMMap(currentContext, interp, fn, 1);
+#else
+    mkfits = new FitsImageFitsAllocGZ(currentContext, interp, fn, fn,
+				      FitsFile::NOFLUSH, 1);
+#endif
     if (!mkfits || !mkfits->isValid() || !mkfits->isBinTable()) {
       if (mkfits)
 	delete mkfits;

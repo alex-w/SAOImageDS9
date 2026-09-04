@@ -10,7 +10,7 @@ proc AutoSaveDef {} {
     global ds9
 
     set iautosave(id) {}
-    set autosave(fn) [file join [GetEnvHome] "$ds9(app).auto"]
+    set autosave(fn) [file join [GetAppDataHome] "$ds9(app).auto"]
 }
 
 proc AutoSave {} {

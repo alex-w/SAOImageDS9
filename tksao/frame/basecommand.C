@@ -10,6 +10,7 @@
 #include "context.h"
 #include "fitsimage.h"
 #include "mmap.h"
+#include "allocgz.h"
 #include "outfile.h"
 #include "outchannel.h"
 #include "outsocket.h"
@@ -839,7 +840,13 @@ void Base::fitsyHasExtCmd(const char* fn)
     return;
   }
 
+  // NB: FitsMMap is a no-op stub on __WIN32 (no mmap()), so probe via
+  // the portable AllocGZ variant there instead
+#ifndef __WIN32
   FitsFile* ext = new FitsFitsMMap(fn, FitsFile::EXACTIMAGE);
+#else
+  FitsFile* ext = new FitsFitsAllocGZ(fn, FitsFile::EXACTIMAGE, FitsFile::NOFLUSH);
+#endif
   if (ext->isValid())
     Tcl_AppendResult(interp, "1", NULL);
   else
