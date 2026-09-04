@@ -835,6 +835,8 @@ proc SAMPErrorInfo {} {
 
 proc SAMPUpdateMenus {} {
     UpdateFileMenuSAMP
+    UpdateFileMenuSAMPHub
+    SAMPHubDialogUpdate
     UpdateCATDialogSAMP
 }
 
