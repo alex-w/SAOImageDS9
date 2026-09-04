@@ -517,12 +517,11 @@ proc SAMPHubSend {method url params resultVar {flag {}}} {
 	puts stderr "SAMPHubSend: $method $url $params $flag"
     }
 
-    # figure out xmlrpc-?
-    set rpc {xmlrpc}
+    # use whatever path the endpoint url specifies (if any); the SAMP
+    # standard profile does not mandate a fixed path such as "xmlrpc"
+    set rpc {}
     if {[ParseURL $url r]} {
-	if {$r(path) != {}} {
-	    set rpc [string range $r(path) 1 end]
-	}
+	set rpc [string range $r(path) 1 end]
     }
 
     if {[catch {set result [xmlrpcCall $url $rpc $method $params]}]} {
