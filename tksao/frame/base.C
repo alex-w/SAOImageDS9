@@ -229,9 +229,50 @@ static size_t PdfTextMaxLineLength(const string& text)
   return curLen > maxLen ? curLen : maxLen;
 }
 
-static void PdfTextPathBBox(const string& text, double fontSize,
+// The generated Postscript (text.C, marker.C, ruler.C, compass.C,
+// colorbarbase.C) uses 'dup true charpath pathbbox' to get a real
+// interpreter's exact font ascent/descent/width, then divides that by a
+// per-caller constant to land the baseline where that widget wants it. Our
+// fake interpreter doesn't run a real font engine, so reconstruct the same
+// Tk_Font 'psfont_' would have been (see Marker::initFonts) from the PS
+// font name/size and ask Tk for its real metrics, rather than guessing a
+// fixed ascent/descent split that ignores the actual font.
+static void PdfTextPathBBox(Tcl_Interp* interp, Tk_Window tkwin,
+			    const string& text, const string& fontName,
+			    double fontSize,
 			    double* llx, double* lly, double* urx, double* ury)
 {
+  string family = "helvetica";
+  string style;
+  size_t dash = fontName.find('-');
+  string base = (dash == string::npos) ? fontName : fontName.substr(0, dash);
+  if (dash != string::npos)
+    style = fontName.substr(dash+1);
+
+  if (base.compare(0, 5, "Times") == 0)
+    family = "times";
+  else if (base.compare(0, 7, "Courier") == 0)
+    family = "courier";
+
+  string weight = (style.find("Bold") != string::npos) ? "bold" : "normal";
+  string slant = (style.find("Oblique") != string::npos ||
+		  style.find("Italic") != string::npos) ? "italic" : "roman";
+
+  ostringstream fstr;
+  fstr << family << ' ' << (int)fontSize << ' ' << weight << ' ' << slant;
+
+  Tk_Font tkfont = Tk_GetFont(interp, tkwin, fstr.str().c_str());
+  if (tkfont) {
+    Tk_FontMetrics metrics;
+    Tk_GetFontMetrics(tkfont, &metrics);
+    *llx = 0;
+    *lly = -metrics.descent;
+    *urx = Tk_TextWidth(tkfont, text.c_str(), text.length());
+    *ury = metrics.ascent;
+    Tk_FreeFont(tkfont);
+    return;
+  }
+
   double width = PdfTextMaxLineLength(text) * fontSize * .6;
   *llx = 0;
   *lly = -fontSize * .2;
@@ -1507,7 +1548,8 @@ int Base::pdfVectorLayers(Tcl_Obj* pdfObj)
       double lly = 0;
       double urx = 0;
       double ury = 0;
-      PdfTextPathBBox(text, currentFontSize, &llx, &lly, &urx, &ury);
+      PdfTextPathBBox(interp, tkwin, text, currentFont, currentFontSize,
+		      &llx, &lly, &urx, &ury);
       stack.push_back(llx);
       stack.push_back(lly);
       stack.push_back(urx);
@@ -1596,16 +1638,22 @@ int Base::pdfVectorLayers(Tcl_Obj* pdfObj)
     else if (tok == "rmoveto" && stack.size() >= 2) {
       double y = stack.back(); stack.pop_back();
       double x = stack.back(); stack.pop_back();
+      // This delta comes from the "center text via charpath/pathbbox" PS
+      // idiom (text.C, marker.C, ruler.C, compass.C, colorbarbase.C),
+      // whose vertical sign assumes genuine Postscript's Y-up convention.
+      // TkCanvasPs() above leaves us in raw Tk canvas Y-down space in PDF
+      // mode (no flip), so the Y component has to be negated to still
+      // mean "down" here; X (left/right) is unaffected by the flip.
       if (fabs(currentAngle) > FLT_EPSILON) {
 	double aa = degToRad(currentAngle);
 	double xx = x*cos(aa) - y*sin(aa);
 	double yy = x*sin(aa) + y*cos(aa);
 	currentX += xx;
-	currentY += yy;
+	currentY -= yy;
       }
       else {
 	currentX += x;
-	currentY += y;
+	currentY -= y;
       }
     }
     else if (tok == "lineto" && stack.size() >= 2) {
