@@ -33,8 +33,15 @@ proc SAMPHubStart {verbose} {
     set samp(debug) $debug(tcl,samp)
     if {[SAMPParseHub]} {
 	# ok, found one, is it alive?
+	# samp(url) is authority-only; re-attach the path SAMPParseHub
+	# split off into samp(method), or SAMPHubSend has nothing to derive
+	# the endpoint path from
+	set huburl $samp(url)
+	if {$samp(method) != {}} {
+	    append huburl "/$samp(method)"
+	}
 	set rr {}
-	if {[SAMPHubSend {samp.hub.ping} $samp(url) {} rr]} {
+	if {[SAMPHubSend {samp.hub.ping} $huburl {} rr]} {
 	    # yes, its alive
 	    if {$verbose} {
 		Error "SAMPHub: [msgcat::mc {found existing hub}]"
@@ -517,12 +524,11 @@ proc SAMPHubSend {method url params resultVar {flag {}}} {
 	puts stderr "SAMPHubSend: $method $url $params $flag"
     }
 
-    # figure out xmlrpc-?
-    set rpc {xmlrpc}
+    # use whatever path the endpoint url specifies (if any); the SAMP
+    # standard profile does not mandate a fixed path such as "xmlrpc"
+    set rpc {}
     if {[ParseURL $url r]} {
-	if {$r(path) != {}} {
-	    set rpc [string range $r(path) 1 end]
-	}
+	set rpc [string range $r(path) 1 end]
     }
 
     if {[catch {set result [xmlrpcCall $url $rpc $method $params]}]} {

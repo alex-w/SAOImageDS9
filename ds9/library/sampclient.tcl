@@ -9,7 +9,7 @@ proc SAMPConnectInit {verbose output debug} {
 
     # connected?
     if {[info exists samp]} {
-	if {$samp(verbose)} {
+	if {[info exists samp(verbose)] && $samp(verbose)} {
 	    SAMPError "SAMP: already connected"
 	}
 	return 0

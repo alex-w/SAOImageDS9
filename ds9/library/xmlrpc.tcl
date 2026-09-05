@@ -309,6 +309,8 @@ proc xmlrpcBuildRequest {method mname params} {
 }
 
 proc xmlrpcParseHTTPCode {str} {
+    global xmlrpc
+
     set DIGIT "\[0-9\]";		# Digit
 
     set	RE "HTTP/";				# HTTP message
