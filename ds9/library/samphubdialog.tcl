@@ -21,6 +21,7 @@ proc SAMPHubDialog {} {
     set mb $isamphub(mb)
 
     Toplevel $w $mb 6 [msgcat::mc {SAMP Hub}] SAMPHubDestroyDialog
+    wm geometry $w "700x550"
 
     $mb add cascade -label [msgcat::mc {File}] -menu $mb.file
     #~ $mb add cascade -label [msgcat::mc {Edit}] -menu $mb.edit
@@ -94,7 +95,7 @@ proc SAMPHubDialogClient {client} {
     set dsamphub(listbox) [ttk::treeview $f.box \
 			       -yscroll [list $f.scroll set] \
 			       -selectmode browse \
-			       -height 28 \
+			       -height 10 \
 			       -show tree \
 			      ]
 

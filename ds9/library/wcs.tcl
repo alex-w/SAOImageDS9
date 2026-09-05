@@ -164,6 +164,7 @@ proc WCSDialog {} {
     set dwcs(ext) 1
 
     Toplevel $w $mb 6 [msgcat::mc {WCS Parameters}] WCSDestroyDialog
+    wm geometry $w "760x680"
 
     $mb add cascade -label [msgcat::mc {File}] -menu $mb.file
     $mb add cascade -label [msgcat::mc {Edit}] -menu $mb.edit

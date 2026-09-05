@@ -1574,18 +1574,31 @@ proc UpdateFileMenuSAMPHub {} {
     global pds9
     global ds9
     global samphub
- 
+    global samp
+
     set mm $ds9(mb).file
     set bb $ds9(buttons).file
 
-    $mm.samphub entryconfig [msgcat::mc {Information}] -state normal
-    $bb.samphubinfo configure -state normal
     if {[info exists samphub]} {
+	# ds9 is hosting the hub
+	$mm.samphub entryconfig [msgcat::mc {Information}] -state normal
+	$bb.samphubinfo configure -state normal
 	$mm.samphub entryconfig [msgcat::mc {Start}] -state disabled
 	$mm.samphub entryconfig [msgcat::mc {Stop}] -state normal
 	$bb.samphubstart configure -state disabled
 	$bb.samphubstop configure -state normal
+    } elseif {[info exists samp]} {
+	# connected to an external hub: we can neither start our own hub
+	# (one is already running) nor stop/inspect someone else's
+	$mm.samphub entryconfig [msgcat::mc {Information}] -state disabled
+	$bb.samphubinfo configure -state disabled
+	$mm.samphub entryconfig [msgcat::mc {Start}] -state disabled
+	$mm.samphub entryconfig [msgcat::mc {Stop}] -state disabled
+	$bb.samphubstart configure -state disabled
+	$bb.samphubstop configure -state disabled
     } else {
+	$mm.samphub entryconfig [msgcat::mc {Information}] -state normal
+	$bb.samphubinfo configure -state normal
 	$mm.samphub entryconfig [msgcat::mc {Start}] -state normal
 	$mm.samphub entryconfig [msgcat::mc {Stop}] -state disabled
 	$bb.samphubstart configure -state normal
